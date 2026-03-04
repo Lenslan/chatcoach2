@@ -1,3 +1,151 @@
 <resources>
-    <string name="app_name">chatcoach</string>
+    <string name="app_name">ChatCoach</string>
+
+    <!-- Navigation -->
+    <string name="nav_dashboard">首页</string>
+    <string name="nav_friends">好友</string>
+    <string name="nav_templates">模板</string>
+    <string name="nav_settings">设置</string>
+
+    <!-- Dashboard -->
+    <string name="dashboard_title">ChatCoach</string>
+    <string name="service_status">服务状态</string>
+    <string name="service_running">无障碍服务运行中</string>
+    <string name="service_stopped">无障碍服务未启动</string>
+    <string name="btn_enable_service">启用服务</string>
+    <string name="btn_enable_floating">启用悬浮窗</string>
+    <string name="recent_active">最近活跃</string>
+    <string name="quick_actions">快捷操作</string>
+    <string name="today_tokens">今日 Token</string>
+    <string name="total_friends">已配置好友</string>
+
+    <!-- Friends -->
+    <string name="friends_title">好友管理</string>
+    <string name="add_friend">添加好友</string>
+    <string name="edit_friend">编辑好友</string>
+    <string name="friend_name_hint">微信名/备注名</string>
+    <string name="relationship">身份关系</string>
+    <string name="tone">交流语气</string>
+    <string name="attitude">沟通态度</string>
+    <string name="custom_prompt">自定义 Prompt</string>
+    <string name="custom_prompt_hint">可选，编写完整的自定义提示词来精细控制回复风格…</string>
+    <string name="notes">备注信息</string>
+    <string name="notes_hint">关于该好友的补充说明，如性格特点、禁忌话题等…</string>
+    <string name="preferred_model">指定模型</string>
+    <string name="use_default_model">使用默认模型</string>
+    <string name="save">保存</string>
+    <string name="delete">删除</string>
+    <string name="cancel">取消</string>
+    <string name="confirm_delete">确认删除</string>
+    <string name="confirm_delete_friend">确定要删除好友「%s」的配置吗？</string>
+
+    <!-- Relationships -->
+    <string name="rel_colleague">同事</string>
+    <string name="rel_boss">领导</string>
+    <string name="rel_client">客户</string>
+    <string name="rel_friend">朋友</string>
+    <string name="rel_lover">恋人</string>
+    <string name="rel_family">家人</string>
+    <string name="rel_elder">长辈</string>
+
+    <!-- Tones -->
+    <string name="tone_formal">正式</string>
+    <string name="tone_casual">轻松</string>
+    <string name="tone_warm">亲切</string>
+    <string name="tone_humor">幽默</string>
+    <string name="tone_respect">尊敬</string>
+    <string name="tone_professional">专业</string>
+
+    <!-- Attitudes -->
+    <string name="att_enthusiastic">主动热情</string>
+    <string name="att_polite">礼貌克制</string>
+    <string name="att_easygoing">随和自然</string>
+    <string name="att_cautious">谨慎委婉</string>
+
+    <!-- Model Settings -->
+    <string name="model_settings_title">模型配置</string>
+    <string name="add_model">添加模型</string>
+    <string name="edit_model">编辑模型</string>
+    <string name="config_name">配置名称</string>
+    <string name="config_name_hint">如：我的 GPT-4o</string>
+    <string name="platform">平台</string>
+    <string name="api_url">API 地址</string>
+    <string name="api_key">API 密钥</string>
+    <string name="model_name">模型名称</string>
+    <string name="set_as_default">设为默认</string>
+    <string name="test_connection">测试连接</string>
+    <string name="testing">测试中…</string>
+    <string name="test_success">连接成功</string>
+    <string name="test_failed">连接失败</string>
+    <string name="default_label">默认</string>
+
+    <!-- Templates -->
+    <string name="templates_title">快捷模板</string>
+    <string name="add_template">添加模板</string>
+    <string name="template_title_hint">模板标题</string>
+    <string name="template_content_hint">模板内容</string>
+    <string name="template_category">分类</string>
+    <string name="use_template">使用</string>
+
+    <!-- Analysis -->
+    <string name="analysis_title">聊天分析</string>
+    <string name="chat_style">聊天风格</string>
+    <string name="emotion_trend">情绪倾向</string>
+    <string name="topic_preferences">话题偏好</string>
+    <string name="communication_tips">沟通建议</string>
+    <string name="start_analysis">开始分析</string>
+    <string name="analyzing">分析中…</string>
+
+    <!-- Review -->
+    <string name="review_title">聊天复盘</string>
+    <string name="start_review">开始复盘</string>
+    <string name="select_time_range">选择对话时间范围</string>
+    <string name="review_score">沟通评分</string>
+    <string name="clarity_score">表达清晰度</string>
+    <string name="tone_score">语气得体性</string>
+    <string name="emotion_score">情绪管理</string>
+    <string name="topic_score">话题推进</string>
+    <string name="highlights">亮点消息</string>
+    <string name="improvements">改进建议</string>
+    <string name="strategies">沟通策略</string>
+    <string name="review_history">复盘历史</string>
+    <string name="reviewing">复盘分析中…</string>
+
+    <!-- Settings -->
+    <string name="settings_title">设置</string>
+    <string name="general_settings">通用设置</string>
+    <string name="floating_window_settings">悬浮窗设置</string>
+    <string name="context_settings">上下文设置</string>
+    <string name="data_settings">数据管理</string>
+    <string name="enable_floating_window">启用悬浮窗</string>
+    <string name="floating_opacity">悬浮窗透明度</string>
+    <string name="auto_trigger">自动触发建议</string>
+    <string name="auto_trigger_desc">检测到新消息时自动生成回复建议</string>
+    <string name="max_context_messages">上下文消息条数</string>
+    <string name="summary_threshold">摘要压缩阈值</string>
+    <string name="summary_threshold_desc">超过此条数时自动摘要压缩</string>
+    <string name="cache_days">聊天记录保留天数</string>
+    <string name="clear_cache">清除缓存</string>
+    <string name="clear_cache_desc">清除所有聊天记录缓存</string>
+    <string name="token_usage_stats">Token 用量统计</string>
+    <string name="total_tokens_used">总计使用 Token</string>
+    <string name="today_tokens_used">今日使用 Token</string>
+    <string name="dark_mode">深色模式</string>
+    <string name="about">关于 ChatCoach</string>
+    <string name="version_info">版本 1.0</string>
+
+    <!-- Floating Window -->
+    <string name="float_regenerate">重新生成</string>
+    <string name="float_copied">已复制到剪贴板</string>
+    <string name="no_model_configured">请先配置大模型</string>
+
+    <!-- Accessibility -->
+    <string name="accessibility_service_description">ChatCoach 需要无障碍服务权限来读取微信聊天内容，以便为您提供智能回复建议。我们不会上传您的聊天记录到任何第三方服务器。</string>
+
+    <!-- Common -->
+    <string name="loading">加载中…</string>
+    <string name="no_data">暂无数据</string>
+    <string name="error_occurred">发生错误</string>
+    <string name="retry">重试</string>
+    <string name="ok">确定</string>
 </resources>

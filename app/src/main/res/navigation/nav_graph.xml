@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="utf-8"?>
+<navigation xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/nav_graph"
+    app:startDestination="@id/nav_dashboard">
+
+    <fragment
+        android:id="@+id/nav_dashboard"
+        android:name="com.example.chatcoach.ui.dashboard.DashboardFragment"
+        android:label="@string/nav_dashboard">
+        <action
+            android:id="@+id/action_dashboard_to_model_settings"
+            app:destination="@id/nav_model_settings" />
+        <action
+            android:id="@+id/action_dashboard_to_friend_detail"
+            app:destination="@id/nav_friend_detail" />
+    </fragment>
+
+    <fragment
+        android:id="@+id/nav_friends"
+        android:name="com.example.chatcoach.ui.friend.FriendListFragment"
+        android:label="@string/nav_friends">
+        <action
+            android:id="@+id/action_friends_to_friend_detail"
+            app:destination="@id/nav_friend_detail" />
+    </fragment>
+
+    <fragment
+        android:id="@+id/nav_friend_detail"
+        android:name="com.example.chatcoach.ui.friend.FriendDetailFragment"
+        android:label="@string/add_friend">
+        <argument
+            android:name="friendId"
+            app:argType="long"
+            android:defaultValue="0L" />
+        <action
+            android:id="@+id/action_friend_detail_to_analysis"
+            app:destination="@id/nav_chat_analysis" />
+        <action
+            android:id="@+id/action_friend_detail_to_review"
+            app:destination="@id/nav_chat_review" />
+    </fragment>
+
+    <fragment
+        android:id="@+id/nav_templates"
+        android:name="com.example.chatcoach.ui.template.TemplateFragment"
+        android:label="@string/nav_templates" />
+
+    <fragment
+        android:id="@+id/nav_settings"
+        android:name="com.example.chatcoach.ui.settings.SettingsFragment"
+        android:label="@string/nav_settings" />
+
+    <fragment
+        android:id="@+id/nav_model_settings"
+        android:name="com.example.chatcoach.ui.model.ModelSettingsFragment"
+        android:label="@string/model_settings_title" />
+
+    <fragment
+        android:id="@+id/nav_chat_analysis"
+        android:name="com.example.chatcoach.ui.analysis.ChatAnalysisFragment"
+        android:label="@string/analysis_title">
+        <argument
+            android:name="friendId"
+            app:argType="long"
+            android:defaultValue="0L" />
+    </fragment>
+
+    <fragment
+        android:id="@+id/nav_chat_review"
+        android:name="com.example.chatcoach.ui.review.ChatReviewFragment"
+        android:label="@string/review_title">
+        <argument
+            android:name="friendId"
+            app:argType="long"
+            android:defaultValue="0L" />
+        <argument
+            android:name="reviewId"
+            app:argType="long"
+            android:defaultValue="0L" />
+    </fragment>
+</navigation>

@@ -1,7 +1,26 @@
-<resources xmlns:tools="http://schemas.android.com/tools">
-    <!-- Base application theme. -->
-    <style name="Base.Theme.Chatcoach" parent="Theme.Material3.DayNight.NoActionBar">
-        <!-- Customize your dark theme here. -->
-        <!-- <item name="colorPrimary">@color/my_dark_primary</item> -->
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Base.Theme.Chatcoach" parent="Theme.Material3.Dark.NoActionBar">
+        <item name="colorPrimary">@color/primary_light</item>
+        <item name="colorPrimaryContainer">#FF003920</item>
+        <item name="colorOnPrimary">#FF003920</item>
+        <item name="colorOnPrimaryContainer">@color/primary_light</item>
+        <item name="colorSecondary">@color/secondary</item>
+        <item name="colorSecondaryContainer">#FF4A3000</item>
+        <item name="colorOnSecondary">#FF4A3000</item>
+        <item name="colorTertiary">@color/tertiary</item>
+        <item name="colorTertiaryContainer">#FF3A1D72</item>
+        <item name="colorError">@color/error</item>
+        <item name="android:colorBackground">#FF1B1C1B</item>
+        <item name="colorSurface">#FF1B1C1B</item>
+        <item name="colorSurfaceVariant">#FF2C2E2C</item>
+        <item name="colorOnBackground">#FFE2E3DE</item>
+        <item name="colorOnSurface">#FFE2E3DE</item>
+        <item name="colorOnSurfaceVariant">#FFC3C8BC</item>
+        <item name="colorOutline">#FF8D9286</item>
+        <item name="colorOutlineVariant">#FF44474E</item>
+        <item name="android:statusBarColor">#FF1B1C1B</item>
     </style>
+
+    <style name="Theme.Chatcoach" parent="Base.Theme.Chatcoach" />
 </resources>

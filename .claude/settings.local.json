@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(export JAVA_HOME=\"/c/Program Files/Android/Android Studio/jbr\")",
+      "Bash(/c/Users/lenslan/workspace/ohter_proj/chatcoach/gradlew:*)",
+      "Bash(\"/c/Users/lenslan/AppData/Local/Android/Sdk/platform-tools/adb.exe\" -s emulator-5554 shell \"dumpsys activity activities | grep ''com.example.chatcoach''\")",
+      "Bash(\"/c/Users/lenslan/AppData/Local/Android/Sdk/platform-tools/adb.exe\" -s emulator-5554 shell \"dumpsys activity recents | grep chatcoach\")",
+      "Bash(\"/c/Users/lenslan/AppData/Local/Android/Sdk/platform-tools/adb.exe\" -s emulator-5554 shell appops set com.example.chatcoach SYSTEM_ALERT_WINDOW allow)",
+      "Bash(\"/c/Users/lenslan/AppData/Local/Android/Sdk/platform-tools/adb.exe\" -s emulator-5554 logcat -d -s \"AndroidRuntime:E\")",
+      "Bash(\"/c/Users/lenslan/AppData/Local/Android/Sdk/platform-tools/adb.exe\" -s emulator-5554 install -r \"/c/Users/lenslan/workspace/ohter_proj/chatcoach/app/build/outputs/apk/debug/app-debug.apk\")",
+      "Bash(\"/c/Users/lenslan/AppData/Local/Android/Sdk/platform-tools/adb.exe\" -s emulator-5554 logcat -c)",
+      "Bash(\"/c/Users/lenslan/AppData/Local/Android/Sdk/platform-tools/adb.exe\" -s emulator-5554 shell am force-stop com.example.chatcoach)",
+      "Bash(\"/c/Users/lenslan/AppData/Local/Android/Sdk/platform-tools/adb.exe\" -s emulator-5554 shell am start -n com.example.chatcoach/.MainActivity)"
+    ]
+  }
+}

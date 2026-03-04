@@ -2,4 +2,57 @@
 <resources>
     <color name="black">#FF000000</color>
     <color name="white">#FFFFFFFF</color>
+
+    <!-- Primary: WeChat Green -->
+    <color name="primary">#FF07C160</color>
+    <color name="primary_dark">#FF06A050</color>
+    <color name="primary_light">#FF4CD964</color>
+    <color name="primary_container">#FFCEF5D8</color>
+    <color name="on_primary">#FFFFFFFF</color>
+    <color name="on_primary_container">#FF002110</color>
+
+    <!-- Secondary: Warm Orange -->
+    <color name="secondary">#FFFF9800</color>
+    <color name="secondary_container">#FFFFF0D6</color>
+    <color name="on_secondary">#FFFFFFFF</color>
+
+    <!-- Tertiary: Soft Purple -->
+    <color name="tertiary">#FF7E57C2</color>
+    <color name="tertiary_container">#FFEDE7F6</color>
+
+    <!-- Background -->
+    <color name="background">#FFF8FAF8</color>
+    <color name="surface">#FFFFFFFF</color>
+    <color name="surface_variant">#FFF1F3F1</color>
+    <color name="on_background">#FF1B1C1B</color>
+    <color name="on_surface">#FF1B1C1B</color>
+    <color name="on_surface_variant">#FF44474E</color>
+
+    <!-- Error -->
+    <color name="error">#FFE53935</color>
+    <color name="error_container">#FFFCE4EC</color>
+
+    <!-- Outline -->
+    <color name="outline">#FF74796D</color>
+    <color name="outline_variant">#FFC3C8BC</color>
+
+    <!-- Divider -->
+    <color name="divider">#1F000000</color>
+
+    <!-- Style Tag Colors -->
+    <color name="tag_formal">#FF1565C0</color>
+    <color name="tag_humor">#FFFF8F00</color>
+    <color name="tag_warm">#FFE91E63</color>
+    <color name="tag_concise">#FF00897B</color>
+    <color name="tag_playful">#FFAB47BC</color>
+    <color name="tag_professional">#FF37474F</color>
+
+    <!-- Score Colors -->
+    <color name="score_high">#FF43A047</color>
+    <color name="score_medium">#FFFFA000</color>
+    <color name="score_low">#FFE53935</color>
+
+    <!-- Floating window -->
+    <color name="float_bg">#F0FFFFFF</color>
+    <color name="float_card_bg">#FAFFFFFF</color>
 </resources>
