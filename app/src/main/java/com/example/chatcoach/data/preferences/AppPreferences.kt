@@ -73,6 +73,24 @@ class AppPreferences(context: Context) {
         securePrefs.edit().remove("api_key_$configId").apply()
     }
 
+    // Cached models per platform
+    fun saveCachedModels(platformKey: String, models: List<String>) {
+        prefs.edit().putStringSet("cached_models_$platformKey", models.toSet()).apply()
+    }
+
+    fun getCachedModels(platformKey: String): List<String> {
+        return prefs.getStringSet("cached_models_$platformKey", emptySet())?.toList() ?: emptyList()
+    }
+
+    // API debug log
+    fun saveDebugLog(debugJson: String) {
+        prefs.edit().putString(KEY_API_DEBUG_LOG, debugJson).apply()
+    }
+
+    fun getDebugLog(): String? {
+        return prefs.getString(KEY_API_DEBUG_LOG, null)
+    }
+
     companion object {
         private const val KEY_SERVICE_ENABLED = "service_enabled"
         private const val KEY_FLOAT_OPACITY = "float_opacity"
@@ -82,5 +100,6 @@ class AppPreferences(context: Context) {
         private const val KEY_AUTO_TRIGGER = "auto_trigger"
         private const val KEY_CACHE_DAYS = "cache_days"
         private const val KEY_DARK_MODE = "dark_mode"
+        private const val KEY_API_DEBUG_LOG = "api_debug_log"
     }
 }

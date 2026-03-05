@@ -1,6 +1,8 @@
 package com.example.chatcoach.ui.model
 
 import android.os.Bundle
+import android.text.Editable
+import android.text.TextWatcher
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -84,20 +86,46 @@ class ModelSettingsFragment : Fragment() {
         val platformAdapter = ArrayAdapter(requireContext(), android.R.layout.simple_dropdown_item_1line, platformNames)
         dialogBinding.dropdownPlatform.setAdapter(platformAdapter)
 
+        fun updateModelDropdown(models: List<String>, currentText: String? = null) {
+            val modelAdapter = ArrayAdapter(requireContext(), android.R.layout.simple_dropdown_item_1line, models)
+            dialogBinding.dropdownModelName.setAdapter(modelAdapter)
+            if (currentText != null) {
+                dialogBinding.dropdownModelName.setText(currentText, false)
+            }
+        }
+
         fun updateForPlatform(platform: PlatformConfig) {
             selectedPlatform = platform
+            val cachedModels = viewModel.getCachedModels(platform.platform)
+            val allModels = (cachedModels + platform.defaultModels).distinct()
             if (config == null) {
                 dialogBinding.etApiUrl.setText(platform.defaultUrl)
-                if (platform.defaultModels.isNotEmpty()) {
-                    val modelAdapter = ArrayAdapter(requireContext(), android.R.layout.simple_dropdown_item_1line, platform.defaultModels)
-                    dialogBinding.dropdownModelName.setAdapter(modelAdapter)
-                    dialogBinding.dropdownModelName.setText(platform.defaultModels[0], false)
+                if (allModels.isNotEmpty()) {
+                    updateModelDropdown(allModels, allModels[0])
+                }
+            } else {
+                if (allModels.isNotEmpty()) {
+                    updateModelDropdown(allModels)
                 }
             }
         }
 
+        fun updateFetchButtonState() {
+            dialogBinding.btnFetchModels.isEnabled =
+                dialogBinding.etApiUrl.text.toString().isNotBlank()
+        }
+
+        dialogBinding.etApiUrl.addTextChangedListener(object : TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
+            override fun afterTextChanged(s: Editable?) {
+                updateFetchButtonState()
+            }
+        })
+
         dialogBinding.dropdownPlatform.setOnItemClickListener { _, _, position, _ ->
             updateForPlatform(platforms[position])
+            updateFetchButtonState()
         }
 
         if (config != null) {
@@ -108,15 +136,64 @@ class ModelSettingsFragment : Fragment() {
             dialogBinding.dropdownModelName.setText(config.modelName, false)
             dialogBinding.switchDefault.isChecked = config.isDefault
             val platform = platforms.find { it.platform == config.platform }
-            if (platform != null && platform.defaultModels.isNotEmpty()) {
-                val modelAdapter = ArrayAdapter(requireContext(), android.R.layout.simple_dropdown_item_1line, platform.defaultModels)
-                dialogBinding.dropdownModelName.setAdapter(modelAdapter)
+            if (platform != null) {
+                val cachedModels = viewModel.getCachedModels(platform.platform)
+                val allModels = (cachedModels + platform.defaultModels).distinct()
+                if (allModels.isNotEmpty()) {
+                    updateModelDropdown(allModels)
+                }
             }
         } else {
             updateForPlatform(platforms[0])
             dialogBinding.dropdownPlatform.setText(platforms[0].name, false)
         }
 
+        updateFetchButtonState()
+
+        // Fetch models button
+        dialogBinding.btnFetchModels.setOnClickListener {
+            val apiUrl = dialogBinding.etApiUrl.text.toString()
+            val apiKey = dialogBinding.etApiKey.text.toString()
+            viewModel.fetchModels(apiUrl, apiKey, selectedPlatform.platform)
+        }
+
+        // Collect fetch models state
+        val fetchJob = viewLifecycleOwner.lifecycleScope.launch {
+            viewModel.isFetchingModels.collectLatest { isFetching ->
+                dialogBinding.btnFetchModels.isEnabled = !isFetching && dialogBinding.etApiUrl.text.toString().isNotBlank()
+                dialogBinding.progressFetchModels.visibility = if (isFetching) View.VISIBLE else View.GONE
+            }
+        }
+
+        val fetchResultJob = viewLifecycleOwner.lifecycleScope.launch {
+            viewModel.fetchModelsResult.collectLatest { result ->
+                result.onSuccess { models ->
+                    if (models.isEmpty()) {
+                        Toast.makeText(requireContext(), getString(R.string.fetch_models_empty), Toast.LENGTH_SHORT).show()
+                        dialogBinding.btnShowDebug.visibility = View.VISIBLE
+                    } else {
+                        Toast.makeText(
+                            requireContext(),
+                            getString(R.string.fetch_models_success, models.size),
+                            Toast.LENGTH_SHORT
+                        ).show()
+                        val currentDefault = selectedPlatform.defaultModels
+                        val allModels = (models + currentDefault).distinct()
+                        updateModelDropdown(allModels, models[0])
+                        dialogBinding.dropdownModelName.showDropDown()
+                    }
+                }.onFailure { e ->
+                    Toast.makeText(
+                        requireContext(),
+                        "${getString(R.string.fetch_models_failed)}: ${e.message?.take(100)}",
+                        Toast.LENGTH_LONG
+                    ).show()
+                    dialogBinding.btnShowDebug.visibility = View.VISIBLE
+                }
+            }
+        }
+
+        // Test button
         dialogBinding.btnTest.setOnClickListener {
             val testConfig = LlmConfig(
                 id = config?.id ?: 0,
@@ -130,6 +207,30 @@ class ModelSettingsFragment : Fragment() {
             dialogBinding.tvTestResult.text = getString(R.string.testing)
             dialogBinding.tvTestResult.setTextColor(requireContext().getColor(R.color.on_surface_variant))
             viewModel.testConnection(testConfig)
+        }
+
+        // Collect test result in dialog context
+        val testResultJob = viewLifecycleOwner.lifecycleScope.launch {
+            viewModel.testResult.collectLatest { result ->
+                dialogBinding.tvTestResult.visibility = View.VISIBLE
+                result.onSuccess { content ->
+                    dialogBinding.tvTestResult.text = "${getString(R.string.test_success)}: $content"
+                }.onFailure { e ->
+                    dialogBinding.tvTestResult.text = "${getString(R.string.test_failed)}: ${e.message?.take(100)}"
+                    dialogBinding.btnShowDebug.visibility = View.VISIBLE
+                }
+            }
+        }
+
+        // Debug info toggle
+        dialogBinding.btnShowDebug.setOnClickListener {
+            if (dialogBinding.tvDebugInfo.visibility == View.VISIBLE) {
+                dialogBinding.tvDebugInfo.visibility = View.GONE
+            } else {
+                val debugLog = viewModel.getDebugLog()
+                dialogBinding.tvDebugInfo.text = debugLog ?: "(无调试信息)"
+                dialogBinding.tvDebugInfo.visibility = View.VISIBLE
+            }
         }
 
         val dialog = MaterialAlertDialogBuilder(requireContext())
@@ -149,6 +250,11 @@ class ModelSettingsFragment : Fragment() {
                 viewModel.saveConfig(newConfig)
             }
             .setNegativeButton(getString(R.string.cancel), null)
+            .setOnDismissListener {
+                fetchJob.cancel()
+                fetchResultJob.cancel()
+                testResultJob.cancel()
+            }
             .show()
     }
 

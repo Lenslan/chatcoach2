@@ -78,6 +78,11 @@
     <string name="test_success">连接成功</string>
     <string name="test_failed">连接失败</string>
     <string name="default_label">默认</string>
+    <string name="fetch_models">从 API 获取可用模型</string>
+    <string name="fetch_models_success">获取成功，共 %d 个模型</string>
+    <string name="fetch_models_failed">获取模型失败</string>
+    <string name="fetch_models_empty">API 返回的模型列表为空</string>
+    <string name="show_debug_info">查看调试信息</string>
 
     <!-- Templates -->
     <string name="templates_title">快捷模板</string>

@@ -8,16 +8,38 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.withContext
 import okhttp3.*
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.sse.EventSource
 import okhttp3.sse.EventSourceListener
 import okhttp3.sse.EventSources
+import org.json.JSONObject
 import java.io.IOException
+import java.text.SimpleDateFormat
+import java.util.*
 import java.util.concurrent.TimeUnit
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
+
+data class ApiDebugInfo(
+    val url: String,
+    val statusCode: Int,
+    val headers: String,
+    val body: String,
+    val timestamp: String
+) {
+    fun toJson(): String {
+        val json = JSONObject()
+        json.put("url", url)
+        json.put("statusCode", statusCode)
+        json.put("headers", headers)
+        json.put("body", body)
+        json.put("timestamp", timestamp)
+        return json.toString(2)
+    }
+}
 
 class LlmApiService {
 
@@ -28,6 +50,9 @@ class LlmApiService {
         .readTimeout(60, TimeUnit.SECONDS)
         .writeTimeout(30, TimeUnit.SECONDS)
         .build()
+
+    var lastDebugInfo: ApiDebugInfo? = null
+        private set
 
     suspend fun sendRequest(
         config: LlmConfig,
@@ -62,6 +87,12 @@ class LlmApiService {
                     try {
                         val body = response.body?.string()
                         if (!response.isSuccessful) {
+                            lastDebugInfo = buildDebugInfo(
+                                url = config.apiUrl,
+                                statusCode = response.code,
+                                headers = response.headers.toString(),
+                                body = body ?: ""
+                            )
                             continuation.resumeWithException(
                                 IOException("API 请求失败 (${response.code}): ${body?.take(200)}")
                             )
@@ -113,6 +144,12 @@ class LlmApiService {
                     try {
                         val body = response.body?.string()
                         if (!response.isSuccessful) {
+                            lastDebugInfo = buildDebugInfo(
+                                url = config.apiUrl,
+                                statusCode = response.code,
+                                headers = response.headers.toString(),
+                                body = body ?: ""
+                            )
                             continuation.resumeWithException(
                                 IOException("Claude API 请求失败 (${response.code}): ${body?.take(200)}")
                             )
@@ -224,5 +261,114 @@ class LlmApiService {
                 builder.addHeader("Authorization", "Bearer ${config.apiKey}")
             }
         }
+    }
+
+    suspend fun fetchModels(
+        apiUrl: String,
+        apiKey: String,
+        platform: String
+    ): Pair<Result<List<String>>, ApiDebugInfo?> = withContext(Dispatchers.IO) {
+        if (apiUrl.isBlank()) {
+            return@withContext Pair(Result.failure(Exception("API 地址不能为空")), null)
+        }
+
+        val fetchClient = OkHttpClient.Builder()
+            .connectTimeout(10, TimeUnit.SECONDS)
+            .readTimeout(10, TimeUnit.SECONDS)
+            .build()
+
+        val cleanBaseUrl = normalizeBaseUrl(apiUrl)
+
+        val request = try {
+            Request.Builder()
+                .url("$cleanBaseUrl/models")
+                .apply { addAuthHeaderForFetch(this, apiKey, platform) }
+                .get()
+                .build()
+        } catch (e: IllegalArgumentException) {
+            return@withContext Pair(
+                Result.failure(Exception("API 地址格式无效: ${e.message}")),
+                null
+            )
+        }
+
+        try {
+            fetchClient.newCall(request).execute().use { response ->
+                val responseBody = response.body?.string() ?: ""
+                val debugInfo = buildDebugInfo(
+                    url = request.url.toString(),
+                    statusCode = response.code,
+                    headers = response.headers.toString(),
+                    body = responseBody
+                )
+                lastDebugInfo = debugInfo
+
+                if (response.isSuccessful) {
+                    val json = JSONObject(responseBody)
+                    val data = json.optJSONArray("data")
+                    val models = mutableListOf<String>()
+                    if (data != null) {
+                        for (i in 0 until data.length()) {
+                            val item = data.optJSONObject(i)
+                            val id = item?.optString("id", "")?.trim() ?: ""
+                            if (id.isNotEmpty()) {
+                                models.add(id)
+                            }
+                        }
+                    }
+                    Pair(Result.success(models), debugInfo)
+                } else {
+                    Pair(
+                        Result.failure(Exception("HTTP ${response.code}: ${responseBody.take(200)}")),
+                        debugInfo
+                    )
+                }
+            }
+        } catch (e: Exception) {
+            val debugInfo = buildDebugInfo(
+                url = request.url.toString(),
+                statusCode = -1,
+                headers = "",
+                body = e.message ?: e.toString()
+            )
+            lastDebugInfo = debugInfo
+            Pair(Result.failure(e), debugInfo)
+        }
+    }
+
+    private fun normalizeBaseUrl(url: String): String {
+        var normalized = url.trim().removeSuffix("/")
+        if (!normalized.startsWith("http://") && !normalized.startsWith("https://")) {
+            normalized = "https://$normalized"
+        }
+        normalized = normalized.removeSuffix("/chat/completions")
+        normalized = normalized.removeSuffix("/messages")
+        return normalized
+    }
+
+    private fun addAuthHeaderForFetch(builder: Request.Builder, apiKey: String, platform: String) {
+        when (platform) {
+            LlmConfig.PLATFORM_CLAUDE -> {
+                builder.addHeader("x-api-key", apiKey)
+                builder.addHeader("anthropic-version", "2023-06-01")
+            }
+            LlmConfig.PLATFORM_OLLAMA -> { /* no auth needed */ }
+            else -> {
+                if (apiKey.isNotBlank()) {
+                    builder.addHeader("Authorization", "Bearer $apiKey")
+                }
+            }
+        }
+    }
+
+    private fun buildDebugInfo(url: String, statusCode: Int, headers: String, body: String): ApiDebugInfo {
+        val sdf = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault())
+        return ApiDebugInfo(
+            url = url,
+            statusCode = statusCode,
+            headers = headers,
+            body = body.take(2000),
+            timestamp = sdf.format(Date())
+        )
     }
 }

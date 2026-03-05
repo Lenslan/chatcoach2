@@ -14,7 +14,13 @@
       "Bash(.\\\\gradlew assembleDebug:*)",
       "Bash(.\\\\gradlew.bat assembleDebug:*)",
       "Bash(cmd /c \"gradlew.bat assembleDebug\")",
-      "Bash(C:/Users/lenslan/workspace/ohter_proj/chatcoach/gradlew.bat assembleDebug:*)"
+      "Bash(C:/Users/lenslan/workspace/ohter_proj/chatcoach/gradlew.bat assembleDebug:*)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "Bash(gh repo view:*)",
+      "Bash(gh api:*)",
+      "Bash(where:*)",
+      "Bash(curl:*)"
     ]
   }
 }

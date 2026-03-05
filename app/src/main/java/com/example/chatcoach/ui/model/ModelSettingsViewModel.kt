@@ -13,12 +13,19 @@ import kotlinx.coroutines.launch
 class ModelSettingsViewModel(app: Application) : AndroidViewModel(app) {
     private val llmConfigRepo = LlmConfigRepository((app as ChatCoachApp).database.llmConfigDao())
     private val llmApiService = LlmApiService()
+    private val preferences = (app as ChatCoachApp).preferences
 
     val configs: StateFlow<List<LlmConfig>> = llmConfigRepo.getAllConfigs()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     private val _testResult = MutableSharedFlow<Result<String>>()
     val testResult: SharedFlow<Result<String>> = _testResult
+
+    private val _fetchModelsResult = MutableSharedFlow<Result<List<String>>>()
+    val fetchModelsResult: SharedFlow<Result<List<String>>> = _fetchModelsResult
+
+    private val _isFetchingModels = MutableStateFlow(false)
+    val isFetchingModels: StateFlow<Boolean> = _isFetchingModels
 
     fun saveConfig(config: LlmConfig) {
         viewModelScope.launch {
@@ -39,11 +46,41 @@ class ModelSettingsViewModel(app: Application) : AndroidViewModel(app) {
 
     fun testConnection(config: LlmConfig) {
         viewModelScope.launch {
-            _testResult.emit(llmApiService.testConnection(config))
+            val result = llmApiService.testConnection(config)
+            if (result.isFailure) {
+                llmApiService.lastDebugInfo?.let { debugInfo ->
+                    preferences.saveDebugLog(debugInfo.toJson())
+                }
+            }
+            _testResult.emit(result)
         }
     }
 
     fun setDefault(id: Long) {
         viewModelScope.launch { llmConfigRepo.setDefault(id) }
+    }
+
+    fun fetchModels(apiUrl: String, apiKey: String, platform: String) {
+        viewModelScope.launch {
+            _isFetchingModels.value = true
+            val (result, debugInfo) = llmApiService.fetchModels(apiUrl, apiKey, platform)
+            debugInfo?.let { preferences.saveDebugLog(it.toJson()) }
+            if (result.isSuccess) {
+                val models = result.getOrDefault(emptyList())
+                if (models.isNotEmpty()) {
+                    preferences.saveCachedModels(platform, models)
+                }
+            }
+            _fetchModelsResult.emit(result)
+            _isFetchingModels.value = false
+        }
+    }
+
+    fun getCachedModels(platform: String): List<String> {
+        return preferences.getCachedModels(platform)
+    }
+
+    fun getDebugLog(): String? {
+        return preferences.getDebugLog()
     }
 }

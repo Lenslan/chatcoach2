@@ -90,6 +90,36 @@
                 android:inputType="text" />
         </com.google.android.material.textfield.TextInputLayout>
 
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="12dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btn_fetch_models"
+                style="@style/Widget.Material3.Button.TonalButton"
+                android:layout_width="0dp"
+                android:layout_height="40dp"
+                android:layout_weight="1"
+                android:enabled="false"
+                android:text="@string/fetch_models"
+                android:textSize="13sp"
+                app:cornerRadius="12dp"
+                app:icon="@android:drawable/ic_popup_sync"
+                app:iconGravity="textStart"
+                app:iconSize="18dp" />
+
+            <ProgressBar
+                android:id="@+id/progress_fetch_models"
+                style="?android:attr/progressBarStyleSmall"
+                android:layout_width="24dp"
+                android:layout_height="24dp"
+                android:layout_marginStart="8dp"
+                android:visibility="gone" />
+        </LinearLayout>
+
         <com.google.android.material.switchmaterial.SwitchMaterial
             android:id="@+id/switch_default"
             android:layout_width="match_parent"
@@ -111,6 +141,30 @@
             android:layout_height="wrap_content"
             android:layout_marginTop="8dp"
             android:textSize="13sp"
+            android:visibility="gone" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btn_show_debug"
+            style="@style/Widget.Material3.Button.TextButton"
+            android:layout_width="wrap_content"
+            android:layout_height="36dp"
+            android:layout_marginTop="4dp"
+            android:text="@string/show_debug_info"
+            android:textSize="12sp"
+            android:visibility="gone"
+            app:cornerRadius="8dp" />
+
+        <TextView
+            android:id="@+id/tv_debug_info"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:background="@android:color/transparent"
+            android:fontFamily="monospace"
+            android:maxLines="15"
+            android:scrollbars="vertical"
+            android:textIsSelectable="true"
+            android:textSize="11sp"
             android:visibility="gone" />
     </LinearLayout>
 </androidx.core.widget.NestedScrollView>
