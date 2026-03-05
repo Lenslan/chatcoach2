@@ -10,7 +10,11 @@
       "Bash(\"/c/Users/lenslan/AppData/Local/Android/Sdk/platform-tools/adb.exe\" -s emulator-5554 install -r \"/c/Users/lenslan/workspace/ohter_proj/chatcoach/app/build/outputs/apk/debug/app-debug.apk\")",
       "Bash(\"/c/Users/lenslan/AppData/Local/Android/Sdk/platform-tools/adb.exe\" -s emulator-5554 logcat -c)",
       "Bash(\"/c/Users/lenslan/AppData/Local/Android/Sdk/platform-tools/adb.exe\" -s emulator-5554 shell am force-stop com.example.chatcoach)",
-      "Bash(\"/c/Users/lenslan/AppData/Local/Android/Sdk/platform-tools/adb.exe\" -s emulator-5554 shell am start -n com.example.chatcoach/.MainActivity)"
+      "Bash(\"/c/Users/lenslan/AppData/Local/Android/Sdk/platform-tools/adb.exe\" -s emulator-5554 shell am start -n com.example.chatcoach/.MainActivity)",
+      "Bash(.\\\\gradlew assembleDebug:*)",
+      "Bash(.\\\\gradlew.bat assembleDebug:*)",
+      "Bash(cmd /c \"gradlew.bat assembleDebug\")",
+      "Bash(C:/Users/lenslan/workspace/ohter_proj/chatcoach/gradlew.bat assembleDebug:*)"
     ]
   }
 }

@@ -26,10 +26,13 @@ import kotlinx.coroutines.flow.collectLatest
 class FloatingWindowService : Service() {
 
     private lateinit var windowManager: WindowManager
+    private lateinit var layoutParams: WindowManager.LayoutParams
     private var floatingView: View? = null
     private var collapsedView: View? = null
     private var expandedView: View? = null
     private var isExpanded = false
+    private var isPinned = false
+    private var isDebugMode = false
     private val serviceScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
     private val llmService = LlmApiService()
 
@@ -37,6 +40,12 @@ class FloatingWindowService : Service() {
     private var currentMessages: List<ChatMessage> = emptyList()
     private var suggestions: List<ReplyItem> = emptyList()
     private lateinit var themedContext: Context
+
+    // Debug data
+    private var debugFriendDetection: String = ""
+    private var debugCapturedMessages: String = ""
+    private var debugPrompt: String = ""
+    private var debugRawResponse: String = ""
 
     data class ReplyItem(val styleTag: String, val content: String)
 
@@ -50,12 +59,12 @@ class FloatingWindowService : Service() {
         observeMessages()
     }
 
-    @SuppressLint("InflateParams")
+    @SuppressLint("InflateParams", "ClickableViewAccessibility")
     private fun createFloatingWindow() {
         themedContext = ContextThemeWrapper(this, R.style.Theme_Chatcoach)
         floatingView = LayoutInflater.from(themedContext).inflate(R.layout.layout_floating_window, null)
 
-        val params = WindowManager.LayoutParams(
+        layoutParams = WindowManager.LayoutParams(
             WindowManager.LayoutParams.WRAP_CONTENT,
             WindowManager.LayoutParams.WRAP_CONTENT,
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
@@ -77,17 +86,27 @@ class FloatingWindowService : Service() {
         expandedView?.visibility = View.GONE
         collapsedView?.visibility = View.VISIBLE
 
-        setupDragAndClick(params)
+        // Listen for outside touches to collapse the window
+        floatingView?.setOnTouchListener { _, event ->
+            if (event.action == MotionEvent.ACTION_OUTSIDE && isExpanded && !isPinned) {
+                toggleExpanded()
+                true
+            } else {
+                false
+            }
+        }
+
+        setupDragAndClick()
         setupExpandedView()
 
-        windowManager.addView(floatingView, params)
+        windowManager.addView(floatingView, layoutParams)
 
         val prefs = ChatCoachApp.instance.preferences
         floatingView?.alpha = prefs.floatingWindowOpacity
     }
 
     @SuppressLint("ClickableViewAccessibility")
-    private fun setupDragAndClick(params: WindowManager.LayoutParams) {
+    private fun setupDragAndClick() {
         var initialX = 0
         var initialY = 0
         var initialTouchX = 0f
@@ -97,8 +116,8 @@ class FloatingWindowService : Service() {
         collapsedView?.setOnTouchListener { _, event ->
             when (event.action) {
                 MotionEvent.ACTION_DOWN -> {
-                    initialX = params.x
-                    initialY = params.y
+                    initialX = layoutParams.x
+                    initialY = layoutParams.y
                     initialTouchX = event.rawX
                     initialTouchY = event.rawY
                     isDragging = false
@@ -108,9 +127,9 @@ class FloatingWindowService : Service() {
                     val dx = event.rawX - initialTouchX
                     val dy = event.rawY - initialTouchY
                     if (Math.abs(dx) > 10 || Math.abs(dy) > 10) isDragging = true
-                    params.x = initialX - dx.toInt()
-                    params.y = initialY + dy.toInt()
-                    windowManager.updateViewLayout(floatingView, params)
+                    layoutParams.x = initialX - dx.toInt()
+                    layoutParams.y = initialY + dy.toInt()
+                    windowManager.updateViewLayout(floatingView, layoutParams)
                     true
                 }
                 MotionEvent.ACTION_UP -> {
@@ -131,6 +150,17 @@ class FloatingWindowService : Service() {
                 generateSuggestions(friend, currentMessages)
             }
         }
+        floatingView?.findViewById<View>(R.id.btn_pin)?.setOnClickListener {
+            isPinned = !isPinned
+            val iconRes = if (isPinned) R.drawable.ic_pin_filled else R.drawable.ic_pin_outline
+            floatingView?.findViewById<ImageView>(R.id.btn_pin)?.setImageResource(iconRes)
+        }
+        floatingView?.findViewById<View>(R.id.btn_debug)?.setOnClickListener {
+            isDebugMode = !isDebugMode
+            floatingView?.findViewById<View>(R.id.debug_panel)?.visibility =
+                if (isDebugMode) View.VISIBLE else View.GONE
+            if (isDebugMode) updateDebugPanel()
+        }
     }
 
     private fun toggleExpanded() {
@@ -138,10 +168,14 @@ class FloatingWindowService : Service() {
         if (isExpanded) {
             collapsedView?.visibility = View.GONE
             expandedView?.visibility = View.VISIBLE
+            layoutParams.flags = WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                    WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH
         } else {
             expandedView?.visibility = View.GONE
             collapsedView?.visibility = View.VISIBLE
+            layoutParams.flags = WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
         }
+        windowManager.updateViewLayout(floatingView, layoutParams)
     }
 
     private fun observeMessages() {
@@ -157,11 +191,28 @@ class FloatingWindowService : Service() {
                 floatingView?.findViewById<TextView>(R.id.tv_friend_name)?.text = name
                 val statusText = if (currentFriend != null) "已匹配" else "未配置"
                 floatingView?.findViewById<TextView>(R.id.tv_match_status)?.text = statusText
+
+                // Debug: friend detection
+                debugFriendDetection = buildString {
+                    appendLine("检测到名称: $name")
+                    appendLine("匹配好友: ${currentFriend?.wechatName ?: "无"}")
+                    appendLine("关系: ${currentFriend?.relationship ?: "N/A"}")
+                }
+                if (isDebugMode) updateDebugPanel()
             }
         }
         serviceScope.launch {
             ChatAccessibilityService.newMessages.collectLatest { messages ->
                 currentMessages = messages
+
+                // Debug: captured messages
+                debugCapturedMessages = if (messages.isEmpty()) {
+                    "(空)"
+                } else {
+                    messages.joinToString("\n") { "[${it.sender}] ${it.content}" }
+                }
+                if (isDebugMode) updateDebugPanel()
+
                 val db = ChatCoachApp.instance.database
                 db.chatMessageDao().insertAll(messages)
 
@@ -216,12 +267,22 @@ class FloatingWindowService : Service() {
 
                 // Build reply prompt
                 val prompt = PromptBuilder.buildReplyPrompt(friend, contextMessages, summary)
+
+                // Debug: capture prompt
+                debugPrompt = prompt
+                if (isDebugMode) updateDebugPanel()
+
                 val response = llmService.sendRequest(
                     config,
                     listOf(MessageItem.system(prompt), MessageItem.user("请给出回复建议"))
                 )
 
                 val content = response.choices?.firstOrNull()?.message?.content ?: ""
+
+                // Debug: capture raw response
+                debugRawResponse = content.ifEmpty { "(空响应)" }
+                if (isDebugMode) updateDebugPanel()
+
                 suggestions = parseReplySuggestions(content)
                 displaySuggestions(suggestions)
 
@@ -237,6 +298,13 @@ class FloatingWindowService : Service() {
                     )
                 }
             } catch (e: Exception) {
+                // Debug: capture error
+                debugRawResponse = buildString {
+                    appendLine("ERROR: ${e.message}")
+                    appendLine(e.stackTraceToString().take(500))
+                }
+                if (isDebugMode) updateDebugPanel()
+
                 showError("生成失败: ${e.message?.take(50)}")
             } finally {
                 showLoading(false)
@@ -305,6 +373,23 @@ class FloatingWindowService : Service() {
         }
         container.addView(tv)
         if (!isExpanded) toggleExpanded()
+    }
+
+    private fun updateDebugPanel() {
+        val text = buildString {
+            appendLine("══ Friend Detection ══")
+            appendLine(debugFriendDetection.ifEmpty { getString(R.string.debug_no_data) })
+            appendLine()
+            appendLine("══ Captured Messages ══")
+            appendLine(debugCapturedMessages.ifEmpty { getString(R.string.debug_no_data) })
+            appendLine()
+            appendLine("══ Prompt Sent ══")
+            appendLine(debugPrompt.ifEmpty { getString(R.string.debug_no_data) })
+            appendLine()
+            appendLine("══ LLM Raw Response ══")
+            appendLine(debugRawResponse.ifEmpty { getString(R.string.debug_no_data) })
+        }
+        floatingView?.findViewById<TextView>(R.id.tv_debug_content)?.text = text
     }
 
     fun updateOpacity(opacity: Float) {

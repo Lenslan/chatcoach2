@@ -138,6 +138,10 @@
     <string name="float_regenerate">重新生成</string>
     <string name="float_copied">已复制到剪贴板</string>
     <string name="no_model_configured">请先配置大模型</string>
+    <string name="float_pin">固定窗口</string>
+    <string name="float_unpin">取消固定</string>
+    <string name="float_debug">调试面板</string>
+    <string name="debug_no_data">(暂无数据)</string>
 
     <!-- Accessibility -->
     <string name="accessibility_service_description">ChatCoach 需要无障碍服务权限来读取微信聊天内容，以便为您提供智能回复建议。我们不会上传您的聊天记录到任何第三方服务器。</string>

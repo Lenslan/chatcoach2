@@ -70,6 +70,28 @@
                 </LinearLayout>
 
                 <ImageView
+                    android:id="@+id/btn_pin"
+                    android:layout_width="28dp"
+                    android:layout_height="28dp"
+                    android:layout_marginEnd="4dp"
+                    android:background="?selectableItemBackgroundBorderless"
+                    android:contentDescription="@string/float_pin"
+                    android:padding="4dp"
+                    android:src="@drawable/ic_pin_outline"
+                    app:tint="@color/white" />
+
+                <ImageView
+                    android:id="@+id/btn_debug"
+                    android:layout_width="28dp"
+                    android:layout_height="28dp"
+                    android:layout_marginEnd="4dp"
+                    android:background="?selectableItemBackgroundBorderless"
+                    android:contentDescription="@string/float_debug"
+                    android:padding="4dp"
+                    android:src="@drawable/ic_debug"
+                    app:tint="@color/white" />
+
+                <ImageView
                     android:id="@+id/btn_close"
                     android:layout_width="28dp"
                     android:layout_height="28dp"
@@ -95,6 +117,26 @@
                 android:layout_height="wrap_content"
                 android:orientation="vertical"
                 android:padding="8dp" />
+
+            <!-- Debug panel -->
+            <ScrollView
+                android:id="@+id/debug_panel"
+                android:layout_width="match_parent"
+                android:layout_height="200dp"
+                android:background="#F5F5F5"
+                android:visibility="gone">
+
+                <TextView
+                    android:id="@+id/tv_debug_content"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:fontFamily="monospace"
+                    android:padding="8dp"
+                    android:text="@string/debug_no_data"
+                    android:textColor="#333333"
+                    android:textIsSelectable="true"
+                    android:textSize="10sp" />
+            </ScrollView>
 
             <!-- Footer buttons -->
             <LinearLayout
