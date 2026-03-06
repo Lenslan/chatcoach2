@@ -1,6 +1,5 @@
 package com.example.chatcoach.service
 
-import android.animation.ValueAnimator
 import android.annotation.SuppressLint
 import android.app.Service
 import android.content.ClipData
@@ -9,9 +8,10 @@ import android.content.Context
 import android.content.Intent
 import android.graphics.PixelFormat
 import android.os.Build
+import android.os.Handler
 import android.os.IBinder
+import android.os.Looper
 import android.view.*
-import android.view.animation.AccelerateDecelerateInterpolator
 import android.widget.*
 import androidx.appcompat.view.ContextThemeWrapper
 import com.example.chatcoach.ChatCoachApp
@@ -20,8 +20,11 @@ import com.example.chatcoach.data.db.entity.ChatMessage
 import com.example.chatcoach.data.db.entity.Friend
 import com.example.chatcoach.network.LlmApiService
 import com.example.chatcoach.network.models.MessageItem
+import com.google.android.material.progressindicator.CircularProgressIndicator
+import com.google.android.material.progressindicator.LinearProgressIndicator
 import kotlinx.coroutines.*
-import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.collect
+import kotlin.coroutines.cancellation.CancellationException
 
 class FloatingWindowService : Service() {
 
@@ -35,17 +38,21 @@ class FloatingWindowService : Service() {
     private var isDebugMode = false
     private val serviceScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
     private val llmService = LlmApiService()
+    private val mainHandler = Handler(Looper.getMainLooper())
 
     private var currentFriend: Friend? = null
     private var currentMessages: List<ChatMessage> = emptyList()
     private var suggestions: List<ReplyItem> = emptyList()
     private lateinit var themedContext: Context
 
+    private var generateJob: Job? = null
+
     // Debug data
     private var debugFriendDetection: String = ""
     private var debugCapturedMessages: String = ""
     private var debugPrompt: String = ""
     private var debugRawResponse: String = ""
+    private var debugShizukuLog: String = ""
 
     data class ReplyItem(val styleTag: String, val content: String)
 
@@ -164,6 +171,10 @@ class FloatingWindowService : Service() {
     }
 
     private fun toggleExpanded() {
+        if (Looper.myLooper() != Looper.getMainLooper()) {
+            mainHandler.post { toggleExpanded() }
+            return
+        }
         isExpanded = !isExpanded
         if (isExpanded) {
             collapsedView?.visibility = View.GONE
@@ -180,19 +191,18 @@ class FloatingWindowService : Service() {
 
     private fun observeMessages() {
         serviceScope.launch {
-            ChatAccessibilityService.isInChatPage.collectLatest { inChat ->
+            ChatAccessibilityService.isInChatPage.collect { inChat ->
                 floatingView?.visibility = if (inChat) View.VISIBLE else View.GONE
             }
         }
         serviceScope.launch {
-            ChatAccessibilityService.currentFriendName.collectLatest { name ->
+            ChatAccessibilityService.currentFriendName.collect { name ->
                 val db = ChatCoachApp.instance.database
                 currentFriend = db.friendDao().getFriendByName(name)
                 floatingView?.findViewById<TextView>(R.id.tv_friend_name)?.text = name
                 val statusText = if (currentFriend != null) "已匹配" else "未配置"
                 floatingView?.findViewById<TextView>(R.id.tv_match_status)?.text = statusText
 
-                // Debug: friend detection
                 debugFriendDetection = buildString {
                     appendLine("检测到名称: $name")
                     appendLine("匹配好友: ${currentFriend?.wechatName ?: "无"}")
@@ -202,10 +212,9 @@ class FloatingWindowService : Service() {
             }
         }
         serviceScope.launch {
-            ChatAccessibilityService.newMessages.collectLatest { messages ->
+            ChatAccessibilityService.newMessages.collect { messages ->
                 currentMessages = messages
 
-                // Debug: captured messages
                 debugCapturedMessages = if (messages.isEmpty()) {
                     "(空)"
                 } else {
@@ -218,20 +227,41 @@ class FloatingWindowService : Service() {
 
                 val prefs = ChatCoachApp.instance.preferences
                 if (prefs.isAutoTriggerEnabled && currentFriend != null) {
-                    generateSuggestions(currentFriend!!, messages)
+                    generateJob?.cancel()
+                    generateJob = serviceScope.launch {
+                        delay(500) // debounce
+                        generateSuggestions(currentFriend!!, messages)
+                    }
                 }
+            }
+        }
+        // Collect Shizuku debug logs
+        serviceScope.launch {
+            ChatAccessibilityService.debugLog.collect { msg ->
+                debugShizukuLog = buildString {
+                    if (debugShizukuLog.length > 1000) {
+                        // Keep only last 1000 chars to avoid growing unbounded
+                        append(debugShizukuLog.takeLast(800))
+                        appendLine()
+                    } else if (debugShizukuLog.isNotEmpty()) {
+                        append(debugShizukuLog)
+                        appendLine()
+                    }
+                    append(msg)
+                }
+                if (isDebugMode) updateDebugPanel()
             }
         }
     }
 
     private fun generateSuggestions(friend: Friend, messages: List<ChatMessage>) {
-        serviceScope.launch {
+        generateJob?.cancel()
+        generateJob = serviceScope.launch {
             showLoading(true)
             try {
                 val db = ChatCoachApp.instance.database
                 val prefs = ChatCoachApp.instance.preferences
 
-                // Get LLM config
                 val config = if (friend.preferredModelId != null) {
                     db.llmConfigDao().getConfigById(friend.preferredModelId)
                 } else {
@@ -241,7 +271,6 @@ class FloatingWindowService : Service() {
                     return@launch
                 }
 
-                // Build context with summary if needed
                 val allMessages = db.chatMessageDao().getRecentMessages(
                     friend.wechatName, prefs.maxContextMessages
                 ).reversed()
@@ -254,39 +283,38 @@ class FloatingWindowService : Service() {
                     val earlyMessages = allMessages.subList(0, splitPoint)
                     contextMessages = allMessages.subList(splitPoint, allMessages.size)
 
-                    // Generate summary
                     val summaryPrompt = PromptBuilder.buildSummaryPrompt(earlyMessages, friend.wechatName)
-                    val summaryResponse = llmService.sendRequest(
-                        config,
-                        listOf(MessageItem.user(summaryPrompt))
-                    )
+                    val summaryResponse = withContext(Dispatchers.IO) {
+                        llmService.sendRequest(
+                            config,
+                            listOf(MessageItem.user(summaryPrompt))
+                        )
+                    }
                     summary = summaryResponse.choices?.firstOrNull()?.message?.content
                 } else {
                     contextMessages = allMessages
                 }
 
-                // Build reply prompt
                 val prompt = PromptBuilder.buildReplyPrompt(friend, contextMessages, summary)
 
-                // Debug: capture prompt
                 debugPrompt = prompt
                 if (isDebugMode) updateDebugPanel()
 
-                val response = llmService.sendRequest(
-                    config,
-                    listOf(MessageItem.system(prompt), MessageItem.user("请给出回复建议"))
-                )
+                val response = withContext(Dispatchers.IO) {
+                    llmService.sendRequest(
+                        config,
+                        listOf(MessageItem.system(prompt), MessageItem.user("请给出回复建议"))
+                    )
+                }
 
                 val content = response.choices?.firstOrNull()?.message?.content ?: ""
 
-                // Debug: capture raw response
                 debugRawResponse = content.ifEmpty { "(空响应)" }
                 if (isDebugMode) updateDebugPanel()
 
                 suggestions = parseReplySuggestions(content)
                 displaySuggestions(suggestions)
 
-                // Record token usage
                 response.usage?.let { usage ->
                     db.tokenUsageDao().insert(
                         com.example.chatcoach.data.db.entity.TokenUsage(
@@ -297,8 +325,9 @@ class FloatingWindowService : Service() {
                         )
                     )
                 }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
-                // Debug: capture error
                 debugRawResponse = buildString {
                     appendLine("ERROR: ${e.message}")
                     appendLine(e.stackTraceToString().take(500))
@@ -357,10 +386,19 @@ class FloatingWindowService : Service() {
     }
 
     private fun showLoading(loading: Boolean) {
-        floatingView?.findViewById<View>(R.id.progress_loading)?.visibility =
-            if (loading) View.VISIBLE else View.GONE
+        // Expanded state: LinearProgressIndicator — must use show()/hide()
+        floatingView?.findViewById<LinearProgressIndicator>(R.id.progress_loading)?.let { indicator ->
+            if (loading) indicator.show() else indicator.hide()
+        }
         floatingView?.findViewById<View>(R.id.suggestions_container)?.visibility =
             if (loading) View.GONE else View.VISIBLE
+
+        // Collapsed state: CircularProgressIndicator — must use show()/hide()
+        floatingView?.findViewById<CircularProgressIndicator>(R.id.progress_collapsed)?.let { indicator ->
+            if (loading) indicator.show() else indicator.hide()
+        }
+        floatingView?.findViewById<View>(R.id.iv_collapsed_icon)?.alpha =
+            if (loading) 0.4f else 1.0f
     }
 
     private fun showError(message: String) {
@@ -376,7 +414,12 @@ class FloatingWindowService : Service() {
     }
 
     private fun updateDebugPanel() {
+        val prefs = ChatCoachApp.instance.preferences
+        val modeLabel = if (prefs.isShizukuModeEnabled) "Shizuku" else "Accessibility"
+
         val text = buildString {
+            appendLine("══ Mode: $modeLabel ══")
+            appendLine()
             appendLine("══ Friend Detection ══")
             appendLine(debugFriendDetection.ifEmpty { getString(R.string.debug_no_data) })
             appendLine()
@@ -388,6 +431,11 @@ class FloatingWindowService : Service() {
             appendLine()
             appendLine("══ LLM Raw Response ══")
             appendLine(debugRawResponse.ifEmpty { getString(R.string.debug_no_data) })
+            if (prefs.isShizukuModeEnabled) {
+                appendLine()
+                appendLine("══ Shizuku Log ══")
+                appendLine(debugShizukuLog.ifEmpty { getString(R.string.debug_no_data) })
+            }
         }
         floatingView?.findViewById<TextView>(R.id.tv_debug_content)?.text = text
     }
@@ -398,6 +446,7 @@ class FloatingWindowService : Service() {
 
     override fun onDestroy() {
         super.onDestroy()
+        generateJob?.cancel()
         if (floatingView != null) {
             windowManager.removeView(floatingView)
         }

@@ -2,8 +2,8 @@ package com.example.chatcoach.network
 
 import com.example.chatcoach.data.db.entity.LlmConfig
 import com.example.chatcoach.network.models.*
-import com.google.gson.Gson
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
@@ -12,11 +12,11 @@ import kotlinx.coroutines.withContext
 import okhttp3.*
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.RequestBody.Companion.toRequestBody
-import okhttp3.sse.EventSource
-import okhttp3.sse.EventSourceListener
-import okhttp3.sse.EventSources
+import org.json.JSONArray
 import org.json.JSONObject
 import java.io.IOException
+import java.net.SocketTimeoutException
+import java.net.UnknownHostException
 import java.text.SimpleDateFormat
 import java.util.*
 import java.util.concurrent.TimeUnit
@@ -43,12 +43,16 @@ data class ApiDebugInfo(
 
 class LlmApiService {
 
-    private val gson = Gson()
+    companion object {
+        private const val MAX_RETRIES = 3
+        private const val RETRY_DELAY_MS = 1000L
+    }
 
     private val client = OkHttpClient.Builder()
         .connectTimeout(30, TimeUnit.SECONDS)
         .readTimeout(60, TimeUnit.SECONDS)
         .writeTimeout(30, TimeUnit.SECONDS)
+        .retryOnConnectionFailure(true)
         .build()
 
     var lastDebugInfo: ApiDebugInfo? = null
@@ -62,19 +66,38 @@ class LlmApiService {
         if (config.platform == LlmConfig.PLATFORM_CLAUDE) {
             return sendClaudeRequest(config, messages)
         }
-        val request = ChatCompletionRequest(
-            model = config.modelName,
-            messages = messages,
-            stream = false
-        )
-        val jsonBody = gson.toJson(request)
+
+        val messagesArray = JSONArray()
+        for (msg in messages) {
+            messagesArray.put(JSONObject().apply {
+                put("role", msg.role)
+                put("content", msg.content)
+            })
+        }
+
+        val requestBody = JSONObject().apply {
+            put("model", config.modelName)
+            put("messages", messagesArray)
+            put("max_tokens", 1024)
+            put("temperature", 0.8)
+        }
+
+        val requestUrl = buildChatCompletionsUrl(config.apiUrl)
+        val jsonBody = requestBody.toString()
         val httpRequest = Request.Builder()
-            .url(config.apiUrl)
+            .url(requestUrl)
             .addHeader("Content-Type", "application/json")
             .apply { addAuthHeader(this, config) }
             .post(jsonBody.toRequestBody("application/json".toMediaType()))
             .build()
 
+        return executeWithRetry { attemptRequest(httpRequest, config) }
+    }
+
+    private suspend fun attemptRequest(
+        httpRequest: Request,
+        config: LlmConfig
+    ): ChatCompletionResponse {
         return suspendCancellableCoroutine { continuation ->
             val call = client.newCall(httpRequest)
             continuation.invokeOnCancellation { call.cancel() }
@@ -88,7 +111,7 @@ class LlmApiService {
                         val body = response.body?.string()
                         if (!response.isSuccessful) {
                             lastDebugInfo = buildDebugInfo(
-                                url = config.apiUrl,
+                                url = httpRequest.url.toString(),
                                 statusCode = response.code,
                                 headers = response.headers.toString(),
                                 body = body ?: ""
@@ -98,7 +121,8 @@ class LlmApiService {
                             )
                             return
                         }
-                        val result = gson.fromJson(body, ChatCompletionResponse::class.java)
+                        val json = JSONObject(body ?: "{}")
+                        val result = parseOpenAIResponse(json)
                         continuation.resume(result)
                     } catch (e: Exception) {
                         continuation.resumeWithException(e)
@@ -106,6 +130,45 @@ class LlmApiService {
                 }
             })
         }
+    }
+
+    private fun parseOpenAIResponse(json: JSONObject): ChatCompletionResponse {
+        val choicesArray = json.optJSONArray("choices")
+        val choices = mutableListOf<Choice>()
+        if (choicesArray != null) {
+            for (i in 0 until choicesArray.length()) {
+                val choiceObj = choicesArray.getJSONObject(i)
+                val messageObj = choiceObj.optJSONObject("message")
+                val deltaObj = choiceObj.optJSONObject("delta")
+                choices.add(
+                    Choice(
+                        index = choiceObj.optInt("index", 0),
+                        message = if (messageObj != null) MessageItem(
+                            role = messageObj.optString("role", "assistant"),
+                            content = messageObj.optString("content", "")
+                        ) else null,
+                        delta = if (deltaObj != null) Delta(
+                            role = if (deltaObj.has("role")) deltaObj.getString("role") else null,
+                            content = if (deltaObj.has("content")) deltaObj.getString("content") else null
+                        ) else null,
+                        finishReason = if (choiceObj.has("finish_reason")) choiceObj.getString("finish_reason") else null
+                    )
+                )
+            }
+        }
+
+        val usageObj = json.optJSONObject("usage")
+        val usage = if (usageObj != null) Usage(
+            promptTokens = usageObj.optInt("prompt_tokens", 0),
+            completionTokens = usageObj.optInt("completion_tokens", 0),
+            totalTokens = usageObj.optInt("total_tokens", 0)
+        ) else null
+
+        return ChatCompletionResponse(
+            id = if (json.has("id")) json.getString("id") else null,
+            choices = choices,
+            usage = usage
+        )
     }
 
     private suspend fun sendClaudeRequest(
@@ -115,80 +178,132 @@ class LlmApiService {
         val systemMessage = messages.firstOrNull { it.role == "system" }
         val otherMessages = messages.filter { it.role != "system" }
 
-        val claudeBody = buildMap {
+        val messagesArray = JSONArray()
+        for (msg in otherMessages) {
+            messagesArray.put(JSONObject().apply {
+                put("role", msg.role)
+                put("content", msg.content)
+            })
+        }
+
+        val requestBody = JSONObject().apply {
             put("model", config.modelName)
             put("max_tokens", 1024)
-            put("messages", otherMessages.map { mapOf("role" to it.role, "content" to it.content) })
+            put("messages", messagesArray)
             if (systemMessage != null) {
                 put("system", systemMessage.content)
             }
         }
-        val jsonBody = gson.toJson(claudeBody)
+
+        val requestUrl = buildClaudeMessagesUrl(config.apiUrl)
+        val jsonBody = requestBody.toString()
         val httpRequest = Request.Builder()
-            .url(config.apiUrl)
+            .url(requestUrl)
             .addHeader("Content-Type", "application/json")
             .addHeader("x-api-key", config.apiKey)
             .addHeader("anthropic-version", "2023-06-01")
             .post(jsonBody.toRequestBody("application/json".toMediaType()))
             .build()
 
-        return suspendCancellableCoroutine { continuation ->
-            val call = client.newCall(httpRequest)
-            continuation.invokeOnCancellation { call.cancel() }
-            call.enqueue(object : Callback {
-                override fun onFailure(call: Call, e: IOException) {
-                    continuation.resumeWithException(e)
-                }
-
-                override fun onResponse(call: Call, response: Response) {
-                    try {
-                        val body = response.body?.string()
-                        if (!response.isSuccessful) {
-                            lastDebugInfo = buildDebugInfo(
-                                url = config.apiUrl,
-                                statusCode = response.code,
-                                headers = response.headers.toString(),
-                                body = body ?: ""
-                            )
-                            continuation.resumeWithException(
-                                IOException("Claude API 请求失败 (${response.code}): ${body?.take(200)}")
-                            )
-                            return
-                        }
-                        val json = gson.fromJson(body, Map::class.java)
-                        @Suppress("UNCHECKED_CAST")
-                        val content = (json["content"] as? List<Map<String, Any>>)
-                            ?.firstOrNull()?.get("text") as? String ?: ""
-                        val usageMap = json["usage"] as? Map<String, Any>
-                        val usage = Usage(
-                            promptTokens = (usageMap?.get("input_tokens") as? Double)?.toInt() ?: 0,
-                            completionTokens = (usageMap?.get("output_tokens") as? Double)?.toInt() ?: 0
-                        )
-                        val result = ChatCompletionResponse(
-                            choices = listOf(Choice(message = MessageItem.assistant(content))),
-                            usage = usage
-                        )
-                        continuation.resume(result)
-                    } catch (e: Exception) {
+        return executeWithRetry {
+            suspendCancellableCoroutine { continuation ->
+                val call = client.newCall(httpRequest)
+                continuation.invokeOnCancellation { call.cancel() }
+                call.enqueue(object : Callback {
+                    override fun onFailure(call: Call, e: IOException) {
                         continuation.resumeWithException(e)
                     }
-                }
-            })
+
+                    override fun onResponse(call: Call, response: Response) {
+                        try {
+                            val body = response.body?.string()
+                            if (!response.isSuccessful) {
+                                lastDebugInfo = buildDebugInfo(
+                                    url = httpRequest.url.toString(),
+                                    statusCode = response.code,
+                                    headers = response.headers.toString(),
+                                    body = body ?: ""
+                                )
+                                continuation.resumeWithException(
+                                    IOException("Claude API 请求失败 (${response.code}): ${body?.take(200)}")
+                                )
+                                return
+                            }
+                            val json = JSONObject(body ?: "{}")
+                            val contentArray = json.optJSONArray("content")
+                            val content = if (contentArray != null && contentArray.length() > 0) {
+                                contentArray.getJSONObject(0).optString("text", "")
+                            } else ""
+
+                            val usageObj = json.optJSONObject("usage")
+                            val usage = Usage(
+                                promptTokens = usageObj?.optInt("input_tokens", 0) ?: 0,
+                                completionTokens = usageObj?.optInt("output_tokens", 0) ?: 0
+                            )
+                            val result = ChatCompletionResponse(
+                                choices = listOf(Choice(message = MessageItem.assistant(content))),
+                                usage = usage
+                            )
+                            continuation.resume(result)
+                        } catch (e: Exception) {
+                            continuation.resumeWithException(e)
+                        }
+                    }
+                })
+            }
         }
+    }
+
+    private suspend fun <T> executeWithRetry(block: suspend () -> T): T {
+        var lastException: Exception? = null
+        for (attempt in 1..MAX_RETRIES) {
+            try {
+                return block()
+            } catch (e: UnknownHostException) {
+                lastException = e
+                if (attempt < MAX_RETRIES) delay(RETRY_DELAY_MS * attempt)
+            } catch (e: SocketTimeoutException) {
+                lastException = e
+                if (attempt < MAX_RETRIES) delay(RETRY_DELAY_MS * attempt)
+            } catch (e: IOException) {
+                if (e.message?.contains("API 请求失败") == true ||
+                    e.message?.contains("Claude API 请求失败") == true
+                ) {
+                    throw e
+                }
+                lastException = e
+                if (attempt < MAX_RETRIES) delay(RETRY_DELAY_MS * attempt)
+            } catch (e: Exception) {
+                throw e
+            }
+        }
+        throw lastException ?: IOException("Unknown error after $MAX_RETRIES retries")
     }
 
     fun streamRequest(
         config: LlmConfig,
         messages: List<MessageItem>
     ): Flow<String> = flow {
-        val request = ChatCompletionRequest(
-            model = config.modelName,
-            messages = messages,
-            stream = true
-        )
-        val jsonBody = gson.toJson(request)
+        val messagesArray = JSONArray()
+        for (msg in messages) {
+            messagesArray.put(JSONObject().apply {
+                put("role", msg.role)
+                put("content", msg.content)
+            })
+        }
+
+        val requestBody = JSONObject().apply {
+            put("model", config.modelName)
+            put("messages", messagesArray)
+            put("max_tokens", 1024)
+            put("temperature", 0.8)
+            put("stream", true)
+        }
+
+        val jsonBody = requestBody.toString()
+        val requestUrl = buildChatCompletionsUrl(config.apiUrl)
         val httpRequest = Request.Builder()
-            .url(config.apiUrl)
+            .url(requestUrl)
             .addHeader("Content-Type", "application/json")
             .addHeader("Accept", "text/event-stream")
             .apply { addAuthHeader(this, config) }
@@ -220,10 +335,14 @@ class LlmApiService {
                     val data = line.removePrefix("data: ").trim()
                     if (data == "[DONE]") break
                     try {
-                        val chunk = gson.fromJson(data, ChatCompletionResponse::class.java)
-                        val content = chunk.choices?.firstOrNull()?.delta?.content
-                        if (!content.isNullOrEmpty()) {
-                            emit(content)
+                        val chunk = JSONObject(data)
+                        val choicesArray = chunk.optJSONArray("choices")
+                        if (choicesArray != null && choicesArray.length() > 0) {
+                            val delta = choicesArray.getJSONObject(0).optJSONObject("delta")
+                            val content = if (delta != null && delta.has("content")) delta.getString("content") else null
+                            if (!content.isNullOrEmpty()) {
+                                emit(content)
+                            }
                         }
                     } catch (_: Exception) { }
                 }
@@ -344,6 +463,28 @@ class LlmApiService {
         normalized = normalized.removeSuffix("/chat/completions")
         normalized = normalized.removeSuffix("/messages")
         return normalized
+    }
+
+    /**
+     * Build the full chat completions URL from a base URL or full URL.
+     * Handles both cases:
+     * - Base URL: "https://api.openai.com/v1" → "https://api.openai.com/v1/chat/completions"
+     * - Full URL: "https://api.openai.com/v1/chat/completions" → unchanged
+     */
+    private fun buildChatCompletionsUrl(apiUrl: String): String {
+        val base = normalizeBaseUrl(apiUrl)
+        return "$base/chat/completions"
+    }
+
+    /**
+     * Build the full Claude messages URL from a base URL or full URL.
+     * Handles both cases:
+     * - Base URL: "https://api.anthropic.com/v1" → "https://api.anthropic.com/v1/messages"
+     * - Full URL: "https://api.anthropic.com/v1/messages" → unchanged
+     */
+    private fun buildClaudeMessagesUrl(apiUrl: String): String {
+        val base = normalizeBaseUrl(apiUrl)
+        return "$base/messages"
     }
 
     private fun addAuthHeaderForFetch(builder: Request.Builder, apiKey: String, platform: String) {

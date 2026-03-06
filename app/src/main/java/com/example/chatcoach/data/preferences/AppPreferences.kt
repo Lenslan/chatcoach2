@@ -60,6 +60,11 @@ class AppPreferences(context: Context) {
         get() = prefs.getBoolean(KEY_DARK_MODE, false)
         set(value) = prefs.edit().putBoolean(KEY_DARK_MODE, value).apply()
 
+    // Shizuku mode
+    var isShizukuModeEnabled: Boolean
+        get() = prefs.getBoolean(KEY_SHIZUKU_MODE, false)
+        set(value) = prefs.edit().putBoolean(KEY_SHIZUKU_MODE, value).apply()
+
     // Secure API key storage
     fun saveApiKey(configId: Long, apiKey: String) {
         securePrefs.edit().putString("api_key_$configId", apiKey).apply()
@@ -100,6 +105,7 @@ class AppPreferences(context: Context) {
         private const val KEY_AUTO_TRIGGER = "auto_trigger"
         private const val KEY_CACHE_DAYS = "cache_days"
         private const val KEY_DARK_MODE = "dark_mode"
+        private const val KEY_SHIZUKU_MODE = "shizuku_mode"
         private const val KEY_API_DEBUG_LOG = "api_debug_log"
     }
 }

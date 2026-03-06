@@ -22,6 +22,7 @@ viewpager2 = "1.1.0"
 cardview = "1.0.0"
 swiperefreshlayout = "1.1.0"
 security = "1.1.0-alpha06"
+shizuku = "13.1.5"
 ksp = "2.3.5"
 
 [libraries]
@@ -70,6 +71,10 @@ gson = { group = "com.google.code.gson", name = "gson", version.ref = "gson" }
 
 # Security
 security-crypto = { group = "androidx.security", name = "security-crypto", version.ref = "security" }
+
+# Shizuku
+shizuku-api = { group = "dev.rikka.shizuku", name = "api", version.ref = "shizuku" }
+shizuku-provider = { group = "dev.rikka.shizuku", name = "provider", version.ref = "shizuku" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

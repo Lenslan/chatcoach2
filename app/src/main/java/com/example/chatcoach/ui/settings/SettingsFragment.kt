@@ -8,7 +8,9 @@ import android.widget.Toast
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.viewModels
 import androidx.lifecycle.lifecycleScope
+import com.example.chatcoach.R
 import com.example.chatcoach.databinding.FragmentSettingsBinding
+import com.example.chatcoach.service.ChatAccessibilityService
 import com.example.chatcoach.service.FloatingWindowService
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import kotlinx.coroutines.flow.collectLatest
@@ -31,6 +33,7 @@ class SettingsFragment : Fragment() {
         setupFloatingSettings(prefs)
         setupContextSettings(prefs)
         setupDataSettings(prefs)
+        setupShizukuSettings(prefs)
         observeData()
     }
 
@@ -85,6 +88,41 @@ class SettingsFragment : Fragment() {
         }
     }
 
+    private fun setupShizukuSettings(prefs: com.example.chatcoach.data.preferences.AppPreferences) {
+        binding.switchShizuku.isChecked = prefs.isShizukuModeEnabled
+        binding.switchShizuku.setOnCheckedChangeListener { _, checked ->
+            prefs.isShizukuModeEnabled = checked
+            // Notify the running accessibility service to bind/unbind Shizuku immediately
+            ChatAccessibilityService.instance?.onShizukuModeChanged(checked)
+            updateShizukuStatus()
+        }
+        updateShizukuStatus()
+    }
+
+    private fun updateShizukuStatus() {
+        val statusText = try {
+            val prefs = viewModel.preferences
+            if (!prefs.isShizukuModeEnabled) {
+                getString(R.string.shizuku_status_unknown)
+            } else if (!rikka.shizuku.Shizuku.pingBinder()) {
+                getString(R.string.shizuku_status_not_running)
+            } else {
+                val available = rikka.shizuku.Shizuku.checkSelfPermission() ==
+                    android.content.pm.PackageManager.PERMISSION_GRANTED
+                if (available) {
+                    getString(R.string.shizuku_status_connected)
+                } else {
+                    getString(R.string.shizuku_status_no_permission)
+                }
+            }
+        } catch (e: IllegalStateException) {
+            getString(R.string.shizuku_status_not_running)
+        } catch (_: Exception) {
+            getString(R.string.shizuku_status_not_installed)
+        }
+        binding.tvShizukuStatus.text = statusText
+    }
+
     private fun observeData() {
         viewLifecycleOwner.lifecycleScope.launch {
             viewModel.todayTokens.collectLatest { tokens ->
@@ -101,6 +139,7 @@ class SettingsFragment : Fragment() {
     override fun onResume() {
         super.onResume()
         viewModel.loadStats()
+        updateShizukuStatus()
     }
 
     override fun onDestroyView() {

@@ -35,6 +35,7 @@ android {
     }
     buildFeatures {
         viewBinding = true
+        aidl = true
     }
 }
 
@@ -82,6 +83,10 @@ dependencies {
 
     // Security
     implementation(libs.security.crypto)
+
+    // Shizuku
+    implementation(libs.shizuku.api)
+    implementation(libs.shizuku.provider)
 
     // Test
     testImplementation(libs.junit)

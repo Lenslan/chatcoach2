@@ -138,6 +138,14 @@
     <string name="dark_mode">深色模式</string>
     <string name="about">关于 ChatCoach</string>
     <string name="version_info">版本 1.0</string>
+    <string name="advanced_settings">高级设置</string>
+    <string name="shizuku_mode">Shizuku 模式</string>
+    <string name="shizuku_mode_desc">使用 Shizuku 通过 uiautomator 获取聊天记录，识别更准确</string>
+    <string name="shizuku_status_unknown">Shizuku 状态: 未检测</string>
+    <string name="shizuku_status_connected">Shizuku 状态: 已连接</string>
+    <string name="shizuku_status_not_installed">Shizuku 状态: 未安装 Shizuku</string>
+    <string name="shizuku_status_no_permission">Shizuku 状态: 未授权</string>
+    <string name="shizuku_status_not_running">Shizuku 状态: 未运行</string>
 
     <!-- Floating Window -->
     <string name="float_regenerate">重新生成</string>

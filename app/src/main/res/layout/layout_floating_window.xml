@@ -13,12 +13,29 @@
         app:cardBackgroundColor="@color/primary"
         app:cardElevation="4dp">
 
-        <ImageView
-            android:layout_width="28dp"
-            android:layout_height="28dp"
-            android:layout_gravity="center"
-            android:src="@drawable/ic_chat_bubble"
-            app:tint="@color/white" />
+        <FrameLayout
+            android:layout_width="match_parent"
+            android:layout_height="match_parent">
+
+            <ImageView
+                android:id="@+id/iv_collapsed_icon"
+                android:layout_width="28dp"
+                android:layout_height="28dp"
+                android:layout_gravity="center"
+                android:src="@drawable/ic_chat_bubble"
+                app:tint="@color/white" />
+
+            <com.google.android.material.progressindicator.CircularProgressIndicator
+                android:id="@+id/progress_collapsed"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:layout_gravity="center"
+                android:indeterminate="true"
+                android:visibility="gone"
+                app:indicatorColor="@color/white"
+                app:indicatorSize="36dp"
+                app:trackThickness="3dp" />
+        </FrameLayout>
     </com.google.android.material.card.MaterialCardView>
 
     <!-- Expanded: Suggestion panel -->
