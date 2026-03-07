@@ -42,10 +42,12 @@ class FloatingWindowService : Service() {
 
     private var currentFriend: Friend? = null
     private var currentMessages: List<ChatMessage> = emptyList()
+    private var currentMessagesFriendName: String? = null
     private var suggestions: List<ReplyItem> = emptyList()
     private lateinit var themedContext: Context
 
     private var generateJob: Job? = null
+    private var polishJob: Job? = null
 
     // Debug data
     private var debugFriendDetection: String = ""
@@ -168,6 +170,37 @@ class FloatingWindowService : Service() {
                 if (isDebugMode) View.VISIBLE else View.GONE
             if (isDebugMode) updateDebugPanel()
         }
+
+        // Manual read messages button
+        floatingView?.findViewById<View>(R.id.btn_read_messages)?.setOnClickListener {
+            ChatAccessibilityService.instance?.forceExtractChatInfo()
+            Toast.makeText(this, "正在读取消息...", Toast.LENGTH_SHORT).show()
+        }
+
+        // Manual send request button
+        floatingView?.findViewById<View>(R.id.btn_manual_request)?.setOnClickListener {
+            val friend = currentFriend ?: createFallbackFriend()
+            generateSuggestions(friend, currentMessages)
+        }
+
+        // Polish button
+        floatingView?.findViewById<View>(R.id.btn_polish)?.setOnClickListener {
+            val input = floatingView?.findViewById<EditText>(R.id.et_polish_input)
+            val draftText = input?.text?.toString()?.trim() ?: ""
+            if (draftText.isEmpty()) {
+                Toast.makeText(this, getString(R.string.float_polish_no_input), Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
+            val friend = currentFriend ?: createFallbackFriend()
+            polishReply(friend, currentMessages, draftText)
+        }
+
+        // EditText focus handling: make window focusable when editing
+        floatingView?.findViewById<EditText>(R.id.et_polish_input)?.setOnFocusChangeListener { _, hasFocus ->
+            if (hasFocus) {
+                setWindowFocusable(true)
+            }
+        }
     }
 
     private fun toggleExpanded() {
@@ -182,6 +215,8 @@ class FloatingWindowService : Service() {
             layoutParams.flags = WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
                     WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH
         } else {
+            // Clear EditText focus and restore non-focusable state
+            floatingView?.findViewById<EditText>(R.id.et_polish_input)?.clearFocus()
             expandedView?.visibility = View.GONE
             collapsedView?.visibility = View.VISIBLE
             layoutParams.flags = WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
@@ -203,6 +238,12 @@ class FloatingWindowService : Service() {
                 val statusText = if (currentFriend != null) "已匹配" else "未配置"
                 floatingView?.findViewById<TextView>(R.id.tv_match_status)?.text = statusText
 
+                // If switching to a different friend, clear accumulated messages
+                if (name != currentMessagesFriendName) {
+                    currentMessages = emptyList()
+                    currentMessagesFriendName = name
+                }
+
                 debugFriendDetection = buildString {
                     appendLine("检测到名称: $name")
                     appendLine("匹配好友: ${currentFriend?.wechatName ?: "无"}")
@@ -213,26 +254,34 @@ class FloatingWindowService : Service() {
         }
         serviceScope.launch {
             ChatAccessibilityService.newMessages.collect { messages ->
-                currentMessages = messages
+                if (messages.isEmpty()) return@collect
 
-                debugCapturedMessages = if (messages.isEmpty()) {
+                val incomingFriend = messages.firstOrNull()?.friendName
+                if (incomingFriend != null && incomingFriend == currentMessagesFriendName) {
+                    // Same friend: merge with existing messages, dedup by content+sender
+                    val existingKeys = currentMessages.map { "${it.sender}:${it.content}" }.toSet()
+                    val newOnly = messages.filter { "${it.sender}:${it.content}" !in existingKeys }
+                    currentMessages = currentMessages + newOnly
+                } else {
+                    // Different friend: replace entirely
+                    currentMessages = messages
+                    currentMessagesFriendName = incomingFriend
+                }
+
+                debugCapturedMessages = if (currentMessages.isEmpty()) {
                     "(空)"
                 } else {
-                    messages.joinToString("\n") { "[${it.sender}] ${it.content}" }
+                    buildString {
+                        appendLine("总计: ${currentMessages.size} 条")
+                        currentMessages.forEach { appendLine("[${it.sender}] ${it.content}") }
+                    }
                 }
                 if (isDebugMode) updateDebugPanel()
 
                 val db = ChatCoachApp.instance.database
                 db.chatMessageDao().insertAll(messages)
 
-                val prefs = ChatCoachApp.instance.preferences
-                if (prefs.isAutoTriggerEnabled && currentFriend != null) {
-                    generateJob?.cancel()
-                    generateJob = serviceScope.launch {
-                        delay(500) // debounce
-                        generateSuggestions(currentFriend!!, messages)
-                    }
-                }
+                // All operations are manual — no auto API calls
             }
         }
         // Collect Shizuku debug logs
@@ -309,7 +358,12 @@ class FloatingWindowService : Service() {
 
                 val content = response.choices?.firstOrNull()?.message?.content ?: ""
 
-                debugRawResponse = content.ifEmpty { "(空响应)" }
+                debugRawResponse = buildString {
+                    appendLine("Parsed content: ${content.ifEmpty { "(空)" }}")
+                    appendLine()
+                    appendLine("Raw API body:")
+                    appendLine(llmService.lastRawResponseBody?.take(1500) ?: "(未捕获)")
+                }
                 if (isDebugMode) updateDebugPanel()
 
                 suggestions = parseReplySuggestions(content)
@@ -335,6 +389,143 @@ class FloatingWindowService : Service() {
                 if (isDebugMode) updateDebugPanel()
 
                 showError("生成失败: ${e.message?.take(50)}")
+            } finally {
+                showLoading(false)
+            }
+        }
+    }
+
+    /**
+     * Create a fallback Friend when no friend is matched in the database.
+     * Uses the detected chat name and neutral defaults.
+     */
+    private fun createFallbackFriend(): Friend {
+        val name = ChatAccessibilityService.currentFriendName.replayCache.lastOrNull() ?: "未知"
+        return Friend(
+            wechatName = name,
+            relationship = "",
+            tone = "",
+            attitude = "",
+            customPrompt = null,
+            notes = null,
+            preferredModelId = null,
+            avatarColor = 0
+        )
+    }
+
+    /**
+     * Toggle the window's focusable state for EditText keyboard input.
+     */
+    private fun setWindowFocusable(focusable: Boolean) {
+        if (focusable) {
+            layoutParams.flags = WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH
+        } else {
+            layoutParams.flags = WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                    WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH
+        }
+        windowManager.updateViewLayout(floatingView, layoutParams)
+    }
+
+    /**
+     * Polish a user-drafted reply using LLM in the current chat context.
+     */
+    private fun polishReply(friend: Friend, messages: List<ChatMessage>, draftReply: String) {
+        polishJob?.cancel()
+        polishJob = serviceScope.launch {
+            showLoading(true)
+            try {
+                val db = ChatCoachApp.instance.database
+                val prefs = ChatCoachApp.instance.preferences
+
+                val config = if (friend.preferredModelId != null) {
+                    db.llmConfigDao().getConfigById(friend.preferredModelId)
+                } else {
+                    db.llmConfigDao().getDefaultConfig()
+                } ?: run {
+                    showError("请先配置大模型")
+                    return@launch
+                }
+
+                val allMessages = if (friend.id != 0L) {
+                    db.chatMessageDao().getRecentMessages(
+                        friend.wechatName, prefs.maxContextMessages
+                    ).reversed()
+                } else {
+                    messages
+                }
+
+                var summary: String? = null
+                val contextMessages: List<ChatMessage>
+
+                if (allMessages.size >= prefs.summaryThreshold) {
+                    val splitPoint = allMessages.size - 20
+                    val earlyMessages = allMessages.subList(0, splitPoint)
+                    contextMessages = allMessages.subList(splitPoint, allMessages.size)
+
+                    val summaryPrompt = PromptBuilder.buildSummaryPrompt(earlyMessages, friend.wechatName)
+                    val summaryResponse = withContext(Dispatchers.IO) {
+                        llmService.sendRequest(
+                            config,
+                            listOf(MessageItem.user(summaryPrompt))
+                        )
+                    }
+                    summary = summaryResponse.choices?.firstOrNull()?.message?.content
+                } else {
+                    contextMessages = allMessages
+                }
+
+                val prompt = PromptBuilder.buildPolishPrompt(friend, contextMessages, draftReply, summary)
+
+                debugPrompt = prompt
+                if (isDebugMode) updateDebugPanel()
+
+                val response = withContext(Dispatchers.IO) {
+                    llmService.sendRequest(
+                        config,
+                        listOf(MessageItem.system(prompt), MessageItem.user("请对草稿进行润色"))
+                    )
+                }
+
+                val content = response.choices?.firstOrNull()?.message?.content ?: ""
+
+                debugRawResponse = buildString {
+                    appendLine("Parsed content: ${content.ifEmpty { "(空)" }}")
+                    appendLine()
+                    appendLine("Raw API body:")
+                    appendLine(llmService.lastRawResponseBody?.take(1500) ?: "(未捕获)")
+                }
+                if (isDebugMode) updateDebugPanel()
+
+                suggestions = parseReplySuggestions(content)
+                displaySuggestions(suggestions)
+
+                // Clear the input after successful polish
+                floatingView?.findViewById<EditText>(R.id.et_polish_input)?.let { et ->
+                    et.text.clear()
+                    et.clearFocus()
+                    setWindowFocusable(false)
+                }
+
+                response.usage?.let { usage ->
+                    db.tokenUsageDao().insert(
+                        com.example.chatcoach.data.db.entity.TokenUsage(
+                            modelConfigId = config.id,
+                            friendId = friend.id,
+                            promptTokens = usage.promptTokens,
+                            completionTokens = usage.completionTokens
+                        )
+                    )
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                debugRawResponse = buildString {
+                    appendLine("ERROR: ${e.message}")
+                    appendLine(e.stackTraceToString().take(500))
+                }
+                if (isDebugMode) updateDebugPanel()
+
+                showError("润色失败: ${e.message?.take(50)}")
             } finally {
                 showLoading(false)
             }
@@ -447,6 +638,7 @@ class FloatingWindowService : Service() {
     override fun onDestroy() {
         super.onDestroy()
         generateJob?.cancel()
+        polishJob?.cancel()
         if (floatingView != null) {
             windowManager.removeView(floatingView)
         }

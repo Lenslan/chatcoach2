@@ -127,6 +127,40 @@
                 android:visibility="gone"
                 app:indicatorColor="@color/primary" />
 
+            <!-- Action buttons row -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center"
+                android:orientation="horizontal"
+                android:paddingHorizontal="8dp"
+                android:paddingTop="4dp">
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btn_read_messages"
+                    style="@style/Widget.Material3.Button.TonalButton"
+                    android:layout_width="0dp"
+                    android:layout_height="36dp"
+                    android:layout_weight="1"
+                    android:layout_marginEnd="4dp"
+                    android:text="@string/float_read_messages"
+                    android:textSize="11sp"
+                    app:icon="@drawable/ic_read_message"
+                    app:iconSize="14dp" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btn_manual_request"
+                    style="@style/Widget.Material3.Button.TonalButton"
+                    android:layout_width="0dp"
+                    android:layout_height="36dp"
+                    android:layout_weight="1"
+                    android:layout_marginStart="4dp"
+                    android:text="@string/float_manual_request"
+                    android:textSize="11sp"
+                    app:icon="@drawable/ic_send"
+                    app:iconSize="14dp" />
+            </LinearLayout>
+
             <!-- Suggestion cards -->
             <LinearLayout
                 android:id="@+id/suggestions_container"
@@ -134,6 +168,42 @@
                 android:layout_height="wrap_content"
                 android:orientation="vertical"
                 android:padding="8dp" />
+
+            <!-- Polish input area -->
+            <LinearLayout
+                android:id="@+id/polish_container"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:paddingHorizontal="8dp"
+                android:paddingBottom="4dp">
+
+                <EditText
+                    android:id="@+id/et_polish_input"
+                    android:layout_width="0dp"
+                    android:layout_height="40dp"
+                    android:layout_weight="1"
+                    android:layout_marginEnd="4dp"
+                    android:background="@drawable/bg_spinner"
+                    android:hint="@string/float_polish_hint"
+                    android:inputType="text"
+                    android:maxLines="1"
+                    android:paddingHorizontal="10dp"
+                    android:textColor="@color/on_surface"
+                    android:textColorHint="@color/outline"
+                    android:textSize="13sp" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btn_polish"
+                    style="@style/Widget.Material3.Button"
+                    android:layout_width="wrap_content"
+                    android:layout_height="36dp"
+                    android:text="@string/float_polish"
+                    android:textSize="12sp"
+                    app:icon="@drawable/ic_polish"
+                    app:iconSize="14dp" />
+            </LinearLayout>
 
             <!-- Debug panel -->
             <ScrollView

@@ -57,6 +57,8 @@ class LlmApiService {
 
     var lastDebugInfo: ApiDebugInfo? = null
         private set
+    var lastRawResponseBody: String? = null
+        private set
 
     suspend fun sendRequest(
         config: LlmConfig,
@@ -109,13 +111,14 @@ class LlmApiService {
                 override fun onResponse(call: Call, response: Response) {
                     try {
                         val body = response.body?.string()
+                        lastRawResponseBody = body
+                        lastDebugInfo = buildDebugInfo(
+                            url = httpRequest.url.toString(),
+                            statusCode = response.code,
+                            headers = response.headers.toString(),
+                            body = body ?: ""
+                        )
                         if (!response.isSuccessful) {
-                            lastDebugInfo = buildDebugInfo(
-                                url = httpRequest.url.toString(),
-                                statusCode = response.code,
-                                headers = response.headers.toString(),
-                                body = body ?: ""
-                            )
                             continuation.resumeWithException(
                                 IOException("API 请求失败 (${response.code}): ${body?.take(200)}")
                             )
@@ -145,13 +148,13 @@ class LlmApiService {
                         index = choiceObj.optInt("index", 0),
                         message = if (messageObj != null) MessageItem(
                             role = messageObj.optString("role", "assistant"),
-                            content = messageObj.optString("content", "")
+                            content = extractContentFromMessage(messageObj)
                         ) else null,
                         delta = if (deltaObj != null) Delta(
-                            role = if (deltaObj.has("role")) deltaObj.getString("role") else null,
-                            content = if (deltaObj.has("content")) deltaObj.getString("content") else null
+                            role = optStringOrNull(deltaObj, "role"),
+                            content = optStringOrNull(deltaObj, "content")
                         ) else null,
-                        finishReason = if (choiceObj.has("finish_reason")) choiceObj.getString("finish_reason") else null
+                        finishReason = optStringOrNull(choiceObj, "finish_reason")
                     )
                 )
             }
@@ -165,10 +168,43 @@ class LlmApiService {
         ) else null
 
         return ChatCompletionResponse(
-            id = if (json.has("id")) json.getString("id") else null,
+            id = optStringOrNull(json, "id"),
             choices = choices,
             usage = usage
         )
+    }
+
+    /**
+     * Safely get a string value from JSONObject, returning null for missing keys or JSON null.
+     * Unlike getString() which throws on null, and optString() which returns "null" string.
+     */
+    private fun optStringOrNull(obj: JSONObject, key: String): String? {
+        if (!obj.has(key) || obj.isNull(key)) return null
+        return obj.optString(key)
+    }
+
+    /**
+     * Extract content from a message object, handling various provider quirks:
+     * - Standard: content field as string
+     * - DeepSeek reasoner: content may be null/empty, use reasoning_content as fallback
+     * - Some providers: content may be JSON null
+     */
+    private fun extractContentFromMessage(messageObj: JSONObject): String {
+        // Try standard content field first
+        val content = if (messageObj.has("content") && !messageObj.isNull("content")) {
+            messageObj.optString("content", "")
+        } else {
+            ""
+        }
+        if (content.isNotEmpty()) return content
+
+        // Fallback: reasoning_content (DeepSeek reasoner)
+        if (messageObj.has("reasoning_content") && !messageObj.isNull("reasoning_content")) {
+            val reasoning = messageObj.optString("reasoning_content", "")
+            if (reasoning.isNotEmpty()) return reasoning
+        }
+
+        return ""
     }
 
     private suspend fun sendClaudeRequest(
@@ -217,13 +253,14 @@ class LlmApiService {
                     override fun onResponse(call: Call, response: Response) {
                         try {
                             val body = response.body?.string()
+                            lastRawResponseBody = body
+                            lastDebugInfo = buildDebugInfo(
+                                url = httpRequest.url.toString(),
+                                statusCode = response.code,
+                                headers = response.headers.toString(),
+                                body = body ?: ""
+                            )
                             if (!response.isSuccessful) {
-                                lastDebugInfo = buildDebugInfo(
-                                    url = httpRequest.url.toString(),
-                                    statusCode = response.code,
-                                    headers = response.headers.toString(),
-                                    body = body ?: ""
-                                )
                                 continuation.resumeWithException(
                                     IOException("Claude API 请求失败 (${response.code}): ${body?.take(200)}")
                                 )

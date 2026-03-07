@@ -17,6 +17,7 @@ class ShizukuChatExtractor {
     companion object {
         private const val TAG = "ShizukuExtractor"
         private const val SHIZUKU_REQUEST_CODE = 1001
+        private const val CHATCOACH_PACKAGE = "com.example.chatcoach"
     }
 
     private var shellService: IShellService? = null
@@ -220,6 +221,13 @@ class ShizukuChatExtractor {
                     val resourceId = parser.getAttributeValue(null, "resource-id") ?: ""
                     val text = parser.getAttributeValue(null, "text") ?: ""
                     val bounds = parser.getAttributeValue(null, "bounds") ?: ""
+                    val pkg = parser.getAttributeValue(null, "package") ?: ""
+
+                    // Skip ChatCoach floating window nodes
+                    if (pkg == CHATCOACH_PACKAGE) {
+                        eventType = parser.next()
+                        continue
+                    }
 
                     // Check if this is a title node by known resource IDs
                     if (text.isNotBlank() && titleResourceIds.any { resourceId.contains(it) }) {
@@ -273,6 +281,13 @@ class ShizukuChatExtractor {
                     val text = parser.getAttributeValue(null, "text") ?: ""
                     val bounds = parser.getAttributeValue(null, "bounds") ?: ""
                     val className = parser.getAttributeValue(null, "class") ?: ""
+                    val pkg = parser.getAttributeValue(null, "package") ?: ""
+
+                    // Skip ChatCoach floating window nodes
+                    if (pkg == CHATCOACH_PACKAGE) {
+                        eventType = parser.next()
+                        continue
+                    }
 
                     if (resourceId.contains("chatting_content_layout")) {
                         inChatContent = true
@@ -342,7 +357,12 @@ class ShizukuChatExtractor {
             "+", "通讯录", "搜索", "聊天信息", "拍摄", "取消", "确定",
             "发现", "我", "文件传输助手", "对方正在输入...", "对方正在输入…"
         )
-        return systemPatterns.any { text == it }
+        if (systemPatterns.any { text == it }) return true
+
+        // ChatCoach floating window UI text
+        if (isFloatingWindowText(text)) return true
+
+        return false
     }
 
     private fun isNonTitleTextForXml(text: String): Boolean {
@@ -389,6 +409,19 @@ class ShizukuChatExtractor {
         // Emoji-only
         if (text.matches(Regex("^\\[.+]$")) && text.length <= 10) return true
 
+        return false
+    }
+
+    private fun isFloatingWindowText(text: String): Boolean {
+        val floatingWindowTexts = listOf(
+            "读取消息", "发送请求", "润色", "重新生成",
+            "已匹配", "未配置", "请先配置大模型",
+            "正在读取消息...", "生成失败", "润色失败",
+            "已复制", "(暂无数据)", "---"
+        )
+        if (floatingWindowTexts.any { text == it }) return true
+        if (text == "输入你想回复的话…" || text == "请先输入要润色的内容") return true
+        if (text.startsWith("══ ") || text.startsWith("Parsed content:") || text.startsWith("Raw API body:")) return true
         return false
     }
 }

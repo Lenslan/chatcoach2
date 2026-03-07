@@ -73,6 +73,9 @@
     <string name="api_key">API 密钥</string>
     <string name="model_name">模型名称</string>
     <string name="set_as_default">设为默认</string>
+    <string name="set_default">设为默认</string>
+    <string name="duplicate_model">复制配置</string>
+    <string name="delete_model">删除</string>
     <string name="test_connection">测试连接</string>
     <string name="testing">测试中…</string>
     <string name="test_success">连接成功</string>
@@ -154,6 +157,12 @@
     <string name="float_pin">固定窗口</string>
     <string name="float_unpin">取消固定</string>
     <string name="float_debug">调试面板</string>
+    <string name="float_read_messages">读取消息</string>
+    <string name="float_manual_request">发送请求</string>
+    <string name="float_polish">润色</string>
+    <string name="float_polish_hint">输入你想回复的话…</string>
+    <string name="float_polish_no_input">请先输入要润色的内容</string>
+    <string name="float_no_messages">暂无聊天记录，请先读取消息</string>
     <string name="debug_no_data">(暂无数据)</string>
 
     <!-- Accessibility -->

@@ -45,7 +45,8 @@ class ModelSettingsFragment : Fragment() {
         adapter = ModelConfigAdapter(
             onItemClick = { config -> showEditDialog(config) },
             onSetDefault = { config -> viewModel.setDefault(config.id) },
-            onDelete = { config -> viewModel.deleteConfig(config) }
+            onDelete = { config -> viewModel.deleteConfig(config) },
+            onDuplicate = { config -> duplicateConfig(config) }
         )
         binding.rvModels.apply {
             layoutManager = LinearLayoutManager(requireContext())
@@ -75,6 +76,16 @@ class ModelSettingsFragment : Fragment() {
                 }
             }
         }
+    }
+
+    private fun duplicateConfig(config: LlmConfig) {
+        val copy = config.copy(
+            id = 0,
+            name = "${config.name} (副本)",
+            isDefault = false,
+            createdAt = System.currentTimeMillis()
+        )
+        showEditDialog(copy)
     }
 
     private fun showEditDialog(config: LlmConfig?) {
