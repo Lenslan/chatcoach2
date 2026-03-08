@@ -42,11 +42,56 @@
             android:id="@+id/tv_friend_name"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginBottom="16dp"
+            android:layout_marginBottom="12dp"
             android:textColor="?colorOnSurface"
             android:textSize="18sp"
             android:textStyle="bold" />
 
+        <!-- Action buttons -->
+        <LinearLayout
+            android:id="@+id/layout_actions"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="12dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btn_start_analysis"
+                style="@style/Widget.Material3.Button"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="@string/start_analysis"
+                app:icon="@drawable/ic_analysis"
+                app:iconSize="18dp" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btn_view_messages"
+                style="@style/Widget.Material3.Button.TonalButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:text="@string/view_analyzed_messages"
+                android:visibility="gone"
+                app:icon="@drawable/ic_chat_bubble"
+                app:iconSize="18dp" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btn_delete_analysis"
+                style="@style/Widget.Material3.Button.TextButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="4dp"
+                android:text="@string/delete_analysis"
+                android:textColor="@color/error"
+                android:visibility="gone"
+                app:icon="@drawable/ic_delete"
+                app:iconSize="18dp"
+                app:iconTint="@color/error" />
+        </LinearLayout>
+
+        <!-- Loading -->
         <LinearLayout
             android:id="@+id/layout_loading"
             android:layout_width="match_parent"
@@ -70,6 +115,26 @@
                 android:textColor="?colorOnSurfaceVariant" />
         </LinearLayout>
 
+        <!-- Empty state -->
+        <LinearLayout
+            android:id="@+id/layout_empty"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:orientation="vertical"
+            android:padding="48dp"
+            android:visibility="gone">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/analysis_empty_hint"
+                android:textAlignment="center"
+                android:textColor="?colorOnSurfaceVariant"
+                android:textSize="14sp" />
+        </LinearLayout>
+
+        <!-- Result -->
         <LinearLayout
             android:id="@+id/layout_result"
             android:layout_width="match_parent"

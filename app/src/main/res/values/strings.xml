@@ -36,6 +36,7 @@
     <string name="save">保存</string>
     <string name="delete">删除</string>
     <string name="cancel">取消</string>
+    <string name="confirm">确定</string>
     <string name="confirm_delete">确认删除</string>
     <string name="confirm_delete_friend">确定要删除好友「%s」的配置吗？</string>
 
@@ -102,6 +103,13 @@
     <string name="topic_preferences">话题偏好</string>
     <string name="communication_tips">沟通建议</string>
     <string name="start_analysis">开始分析</string>
+    <string name="reanalyze">重新分析</string>
+    <string name="delete_analysis">删除分析</string>
+    <string name="view_analyzed_messages">查看聊天记录</string>
+    <string name="analyzed_messages_title">分析所用聊天记录</string>
+    <string name="analysis_empty_hint">暂无分析结果，点击下方按钮开始分析</string>
+    <string name="confirm_delete_analysis">确定要删除当前分析结果吗？</string>
+    <string name="analysis_deleted">分析结果已删除</string>
     <string name="analyzing">分析中…</string>
     <string name="analysis_chat_title">基于分析结果提问</string>
     <string name="analysis_chat_hint">输入你的问题…</string>

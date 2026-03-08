@@ -96,6 +96,19 @@ class AppPreferences(context: Context) {
         return prefs.getString(KEY_API_DEBUG_LOG, null)
     }
 
+    // Analysis cache per friend
+    fun saveAnalysisCache(friendId: Long, json: String) {
+        prefs.edit().putString("analysis_cache_$friendId", json).apply()
+    }
+
+    fun getAnalysisCache(friendId: Long): String? {
+        return prefs.getString("analysis_cache_$friendId", null)
+    }
+
+    fun removeAnalysisCache(friendId: Long) {
+        prefs.edit().remove("analysis_cache_$friendId").apply()
+    }
+
     companion object {
         private const val KEY_SERVICE_ENABLED = "service_enabled"
         private const val KEY_FLOAT_OPACITY = "float_opacity"

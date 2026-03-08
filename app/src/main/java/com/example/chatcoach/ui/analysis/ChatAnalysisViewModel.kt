@@ -4,6 +4,7 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.chatcoach.ChatCoachApp
+import com.example.chatcoach.data.db.entity.ChatMessage
 import com.example.chatcoach.data.db.entity.Friend
 import com.example.chatcoach.data.repository.ChatMessageRepository
 import com.example.chatcoach.data.repository.FriendRepository
@@ -25,12 +26,25 @@ data class AnalysisResult(
 
 data class ChatBubble(val role: String, val content: String)
 
+data class AnalyzedMessage(val sender: String, val content: String)
+
+/**
+ * JSON structure cached in SharedPreferences per friend.
+ */
+private data class AnalysisCacheData(
+    val result: AnalysisResult,
+    val analyzedMessages: List<AnalyzedMessage>,
+    val chatBubbles: List<ChatBubble>,
+    val timestamp: Long
+)
+
 class ChatAnalysisViewModel(app: Application) : AndroidViewModel(app) {
     private val database = (app as ChatCoachApp).database
     private val friendRepo = FriendRepository(database.friendDao())
     private val chatRepo = ChatMessageRepository(database.chatMessageDao())
     private val llmConfigRepo = LlmConfigRepository(database.llmConfigDao())
     private val llmService = LlmApiService()
+    private val preferences = (app as ChatCoachApp).preferences
     private val gson = Gson()
 
     private val _isLoading = MutableStateFlow(false)
@@ -51,9 +65,30 @@ class ChatAnalysisViewModel(app: Application) : AndroidViewModel(app) {
     private val _isChatLoading = MutableStateFlow(false)
     val isChatLoading: StateFlow<Boolean> = _isChatLoading
 
+    private val _analyzedMessages = MutableStateFlow<List<AnalyzedMessage>>(emptyList())
+    val analyzedMessages: StateFlow<List<AnalyzedMessage>> = _analyzedMessages
+
+    private val _cleared = MutableSharedFlow<Unit>()
+    val cleared: SharedFlow<Unit> = _cleared
+
+    private var currentFriendId: Long = 0
+
     fun loadFriend(friendId: Long) {
+        currentFriendId = friendId
         viewModelScope.launch {
             _friend.value = friendRepo.getFriendById(friendId)
+        }
+    }
+
+    fun loadCachedAnalysis(friendId: Long) {
+        val json = preferences.getAnalysisCache(friendId) ?: return
+        try {
+            val cache = gson.fromJson(json, AnalysisCacheData::class.java)
+            _result.value = cache.result
+            _analyzedMessages.value = cache.analyzedMessages
+            _chatMessages.value = cache.chatBubbles
+        } catch (_: Exception) {
+            // Cache corrupt, ignore
         }
     }
 
@@ -87,7 +122,21 @@ class ChatAnalysisViewModel(app: Application) : AndroidViewModel(app) {
                 )
 
                 val content = response.choices?.firstOrNull()?.message?.content ?: ""
-                _result.value = parseAnalysisResult(content)
+                val analysisResult = parseAnalysisResult(content)
+                _result.value = analysisResult
+
+                // Store the analyzed messages
+                val analyzed = messages.map { msg ->
+                    val sender = if (msg.sender == ChatMessage.SENDER_ME) "我" else friend.wechatName
+                    AnalyzedMessage(sender = sender, content = msg.getDisplayContent())
+                }
+                _analyzedMessages.value = analyzed
+
+                // Clear previous chat bubbles for new analysis
+                _chatMessages.value = emptyList()
+
+                // Persist to cache
+                saveCache(friendId)
             } catch (e: Exception) {
                 _error.emit("分析失败: ${e.message?.take(100)}")
             } finally {
@@ -96,23 +145,13 @@ class ChatAnalysisViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    private fun parseAnalysisResult(content: String): AnalysisResult {
-        return try {
-            val jsonStr = content.let {
-                val start = it.indexOf('{')
-                val end = it.lastIndexOf('}')
-                if (start >= 0 && end > start) it.substring(start, end + 1) else it
-            }
-            val map = gson.fromJson<Map<String, Any>>(jsonStr, object : TypeToken<Map<String, Any>>() {}.type)
-            @Suppress("UNCHECKED_CAST")
-            AnalysisResult(
-                chatStyle = map["chatStyle"] as? String ?: "",
-                emotionTrend = map["emotionTrend"] as? String ?: "",
-                topicPreferences = (map["topicPreferences"] as? List<String>) ?: emptyList(),
-                communicationTips = (map["communicationTips"] as? List<String>) ?: emptyList()
-            )
-        } catch (e: Exception) {
-            AnalysisResult(chatStyle = content.take(500))
+    fun clearAnalysis(friendId: Long) {
+        preferences.removeAnalysisCache(friendId)
+        _result.value = null
+        _analyzedMessages.value = emptyList()
+        _chatMessages.value = emptyList()
+        viewModelScope.launch {
+            _cleared.emit(Unit)
         }
     }
 
@@ -162,11 +201,45 @@ class ChatAnalysisViewModel(app: Application) : AndroidViewModel(app) {
                 val response = llmService.sendRequest(config, apiMessages)
                 val reply = response.choices?.firstOrNull()?.message?.content ?: "无回复"
                 _chatMessages.value = _chatMessages.value + ChatBubble("assistant", reply)
+
+                // Persist chat bubbles to cache
+                saveCache(currentFriendId)
             } catch (e: Exception) {
                 _chatMessages.value = _chatMessages.value + ChatBubble("assistant", "请求失败: ${e.message?.take(100)}")
             } finally {
                 _isChatLoading.value = false
             }
+        }
+    }
+
+    private fun saveCache(friendId: Long) {
+        val result = _result.value ?: return
+        val cache = AnalysisCacheData(
+            result = result,
+            analyzedMessages = _analyzedMessages.value,
+            chatBubbles = _chatMessages.value,
+            timestamp = System.currentTimeMillis()
+        )
+        preferences.saveAnalysisCache(friendId, gson.toJson(cache))
+    }
+
+    private fun parseAnalysisResult(content: String): AnalysisResult {
+        return try {
+            val jsonStr = content.let {
+                val start = it.indexOf('{')
+                val end = it.lastIndexOf('}')
+                if (start >= 0 && end > start) it.substring(start, end + 1) else it
+            }
+            val map = gson.fromJson<Map<String, Any>>(jsonStr, object : TypeToken<Map<String, Any>>() {}.type)
+            @Suppress("UNCHECKED_CAST")
+            AnalysisResult(
+                chatStyle = map["chatStyle"] as? String ?: "",
+                emotionTrend = map["emotionTrend"] as? String ?: "",
+                topicPreferences = (map["topicPreferences"] as? List<String>) ?: emptyList(),
+                communicationTips = (map["communicationTips"] as? List<String>) ?: emptyList()
+            )
+        } catch (e: Exception) {
+            AnalysisResult(chatStyle = content.take(500))
         }
     }
 }
