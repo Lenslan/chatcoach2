@@ -55,4 +55,6 @@
     <!-- Floating window -->
     <color name="float_bg">#F0FFFFFF</color>
     <color name="float_card_bg">#FAFFFFFF</color>
+    <color name="debug_bg">#FFF5F5F5</color>
+    <color name="debug_text">#FF333333</color>
 </resources>

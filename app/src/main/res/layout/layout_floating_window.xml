@@ -210,7 +210,7 @@
                 android:id="@+id/debug_panel"
                 android:layout_width="match_parent"
                 android:layout_height="200dp"
-                android:background="#F5F5F5"
+                android:background="@color/debug_bg"
                 android:visibility="gone">
 
                 <TextView
@@ -220,7 +220,7 @@
                     android:fontFamily="monospace"
                     android:padding="8dp"
                     android:text="@string/debug_no_data"
-                    android:textColor="#333333"
+                    android:textColor="@color/debug_text"
                     android:textIsSelectable="true"
                     android:textSize="10sp" />
             </ScrollView>
