@@ -109,6 +109,11 @@ class FriendDetailFragment : Fragment() {
                 binding.dropdownModel.setOnItemClickListener { _, _, position, _ ->
                     selectedModelId = if (position == 0) null else models[position - 1].id
                 }
+                // Update dropdown text after model list is loaded
+                if (selectedModelId != null) {
+                    val model = models.find { it.id == selectedModelId }
+                    binding.dropdownModel.setText(model?.name ?: getString(R.string.use_default_model), false)
+                }
             }
         }
         viewLifecycleOwner.lifecycleScope.launch {

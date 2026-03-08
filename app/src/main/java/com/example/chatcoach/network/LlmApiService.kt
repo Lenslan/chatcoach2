@@ -89,6 +89,7 @@ class LlmApiService {
         val httpRequest = Request.Builder()
             .url(requestUrl)
             .addHeader("Content-Type", "application/json")
+            .addHeader("Accept", "application/json")
             .apply { addAuthHeader(this, config) }
             .post(jsonBody.toRequestBody("application/json".toMediaType()))
             .build()
@@ -124,7 +125,7 @@ class LlmApiService {
                             )
                             return
                         }
-                        val json = JSONObject(body ?: "{}")
+                        val json = JSONObject(extractJsonBody(body ?: "{}"))
                         val result = parseOpenAIResponse(json)
                         continuation.resume(result)
                     } catch (e: Exception) {
@@ -460,7 +461,7 @@ class LlmApiService {
                 lastDebugInfo = debugInfo
 
                 if (response.isSuccessful) {
-                    val json = JSONObject(responseBody)
+                    val json = JSONObject(extractJsonBody(responseBody))
                     val data = json.optJSONArray("data")
                     val models = mutableListOf<String>()
                     if (data != null) {
@@ -500,6 +501,28 @@ class LlmApiService {
         normalized = normalized.removeSuffix("/chat/completions")
         normalized = normalized.removeSuffix("/messages")
         return normalized
+    }
+
+    /**
+     * Extract JSON from a response body that may be in SSE format.
+     * Some APIs (e.g., xAI Grok) may return SSE-formatted responses ("data: {...}")
+     * even for non-streaming requests. This method handles both plain JSON and SSE formats.
+     */
+    private fun extractJsonBody(body: String): String {
+        val trimmed = body.trim()
+        // Already valid JSON object
+        if (trimmed.startsWith("{")) return trimmed
+        // SSE format: extract JSON from "data: {...}" lines
+        if (trimmed.startsWith("data:") || trimmed.startsWith("data ")) {
+            for (line in trimmed.lines()) {
+                val stripped = line.removePrefix("data:").removePrefix("data ").trim()
+                if (stripped.startsWith("{") && stripped != "[DONE]") {
+                    return stripped
+                }
+            }
+        }
+        // Fallback: return as-is and let JSONObject throw a descriptive error
+        return trimmed.ifEmpty { "{}" }
     }
 
     /**
