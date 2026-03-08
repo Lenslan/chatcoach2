@@ -103,6 +103,10 @@
     <string name="communication_tips">沟通建议</string>
     <string name="start_analysis">开始分析</string>
     <string name="analyzing">分析中…</string>
+    <string name="analysis_chat_title">基于分析结果提问</string>
+    <string name="analysis_chat_hint">输入你的问题…</string>
+    <string name="analysis_chat_send">发送</string>
+    <string name="analysis_chat_loading">思考中…</string>
 
     <!-- Review -->
     <string name="review_title">聊天复盘</string>

@@ -21,6 +21,8 @@ data class LlmConfig(
         const val PLATFORM_DEEPSEEK = "deepseek"
         const val PLATFORM_GEMINI = "gemini"
         const val PLATFORM_QWEN = "qwen"
+        const val PLATFORM_GROK = "grok"
+        const val PLATFORM_GLM = "glm"
         const val PLATFORM_OLLAMA = "ollama"
         const val PLATFORM_CUSTOM = "custom"
     }

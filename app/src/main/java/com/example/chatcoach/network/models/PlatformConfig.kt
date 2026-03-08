@@ -47,6 +47,20 @@ data class PlatformConfig(
                 description = "阿里云通义千问系列"
             ),
             PlatformConfig(
+                name = "Grok",
+                platform = LlmConfig.PLATFORM_GROK,
+                defaultUrl = "https://api.x.ai/v1",
+                defaultModels = listOf("grok-3", "grok-3-mini", "grok-2"),
+                description = "xAI Grok 系列模型"
+            ),
+            PlatformConfig(
+                name = "智谱GLM",
+                platform = LlmConfig.PLATFORM_GLM,
+                defaultUrl = "https://open.bigmodel.cn/api/paas/v4",
+                defaultModels = listOf("glm-4-plus", "glm-4-flash", "glm-4-air"),
+                description = "智谱AI GLM 系列模型"
+            ),
+            PlatformConfig(
                 name = "Ollama",
                 platform = LlmConfig.PLATFORM_OLLAMA,
                 defaultUrl = "http://localhost:11434/v1",

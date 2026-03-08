@@ -23,6 +23,8 @@ data class AnalysisResult(
     val communicationTips: List<String> = emptyList()
 )
 
+data class ChatBubble(val role: String, val content: String)
+
 class ChatAnalysisViewModel(app: Application) : AndroidViewModel(app) {
     private val database = (app as ChatCoachApp).database
     private val friendRepo = FriendRepository(database.friendDao())
@@ -42,6 +44,12 @@ class ChatAnalysisViewModel(app: Application) : AndroidViewModel(app) {
 
     private val _friend = MutableStateFlow<Friend?>(null)
     val friend: StateFlow<Friend?> = _friend
+
+    private val _chatMessages = MutableStateFlow<List<ChatBubble>>(emptyList())
+    val chatMessages: StateFlow<List<ChatBubble>> = _chatMessages
+
+    private val _isChatLoading = MutableStateFlow(false)
+    val isChatLoading: StateFlow<Boolean> = _isChatLoading
 
     fun loadFriend(friendId: Long) {
         viewModelScope.launch {
@@ -105,6 +113,60 @@ class ChatAnalysisViewModel(app: Application) : AndroidViewModel(app) {
             )
         } catch (e: Exception) {
             AnalysisResult(chatStyle = content.take(500))
+        }
+    }
+
+    fun sendChatMessage(question: String) {
+        val currentResult = _result.value ?: return
+        val currentFriend = _friend.value
+
+        viewModelScope.launch {
+            _isChatLoading.value = true
+            _chatMessages.value = _chatMessages.value + ChatBubble("user", question)
+
+            try {
+                val config = if (currentFriend?.preferredModelId != null) {
+                    llmConfigRepo.getConfigById(currentFriend.preferredModelId)
+                } else {
+                    llmConfigRepo.getDefaultConfig()
+                } ?: run {
+                    _error.emit("请先配置大模型")
+                    _isChatLoading.value = false
+                    return@launch
+                }
+
+                val systemPrompt = buildString {
+                    appendLine("你是一位社交沟通分析助手。以下是对用户与好友聊天记录的分析结果，请基于这些信息回答用户的后续问题。")
+                    appendLine()
+                    if (currentFriend != null) {
+                        appendLine("[好友信息]")
+                        appendLine("- 好友名称：${currentFriend.wechatName}")
+                        if (currentFriend.relationship.isNotBlank()) appendLine("- 关系：${currentFriend.relationship}")
+                        if (currentFriend.tone.isNotBlank()) appendLine("- 语气：${currentFriend.tone}")
+                        if (currentFriend.attitude.isNotBlank()) appendLine("- 态度：${currentFriend.attitude}")
+                        appendLine()
+                    }
+                    appendLine("[分析结果]")
+                    appendLine("- 聊天风格：${currentResult.chatStyle}")
+                    appendLine("- 情绪倾向：${currentResult.emotionTrend}")
+                    appendLine("- 话题偏好：${currentResult.topicPreferences.joinToString("、")}")
+                    appendLine("- 沟通建议：${currentResult.communicationTips.joinToString("；")}")
+                }
+
+                val apiMessages = mutableListOf<MessageItem>()
+                apiMessages.add(MessageItem.system(systemPrompt))
+                for (bubble in _chatMessages.value) {
+                    apiMessages.add(MessageItem(role = bubble.role, content = bubble.content))
+                }
+
+                val response = llmService.sendRequest(config, apiMessages)
+                val reply = response.choices?.firstOrNull()?.message?.content ?: "无回复"
+                _chatMessages.value = _chatMessages.value + ChatBubble("assistant", reply)
+            } catch (e: Exception) {
+                _chatMessages.value = _chatMessages.value + ChatBubble("assistant", "请求失败: ${e.message?.take(100)}")
+            } finally {
+                _isChatLoading.value = false
+            }
         }
     }
 }
